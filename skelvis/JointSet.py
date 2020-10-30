@@ -1,8 +1,34 @@
 import numpy as np
+import k3d
+from abc import ABCMeta, abstractmethod
 
 
-class MuPoTSJoints:
+class AbstractJointSet(metaclass=ABCMeta):
     def __init__(self):
+        self.limb_graph = None
+        self.number_of_joints = None
+
+    @abstractmethod
+    def convert_to_common_14(self):
+        return None
+
+    def generate_skeleton_from_coordinates(self, joint_coordinates):
+        assert joint_coordinates.shape == (self.number_of_joints, 3)
+        joint_points = k3d.points(positions=joint_coordinates, point_size=0.4, shader='mesh')
+        lines = []
+        for line_indices in self.limb_graph:
+            lines.append(k3d.line(
+                vertices=[
+                    joint_coordinates[line_indices[0]],
+                    joint_coordinates[line_indices[1]]],
+                shader='mesh',
+                width=0.1))
+        return joint_points, lines
+
+
+class MuPoTSJoints(AbstractJointSet):
+    def __init__(self):
+        super().__init__()
         self.names = np.array([
             'head_top', 'neck', 'right_shoulder', 'right_elbow',
             'right_wrist', 'left_shoulder', 'left_elbow', 'left_wrist',
@@ -26,8 +52,9 @@ class MuPoTSJoints:
         return Common14Joints(names=self.names[common14_index_order])
 
 
-class OpenPoseJoints:
+class OpenPoseJoints(AbstractJointSet):
     def __init__(self):
+        super().__init__()
         self.names = np.array([
             'nose', 'neck', 'right_shoulder', 'right_elbow',
             'right_wrist', 'left_shoulder', 'left_elbow', 'left_wrist',
@@ -57,8 +84,9 @@ class OpenPoseJoints:
         return self.names[stable_joint_indices]
 
 
-class CocoExJoints:
+class CocoExJoints(AbstractJointSet):
     def __init__(self):
+        super().__init__()
         self.names = np.array([
             'nose', 'left_eye', 'right_eye', 'left_ear',
             'right_ear', 'left_shoulder', 'right_shoulder', 'left_elbow',
@@ -84,8 +112,9 @@ class CocoExJoints:
         return Common14Joints(names=self.names[common14_index_order])
 
 
-class PanopticJoints:
+class PanopticJoints(AbstractJointSet):
     def __init__(self):
+        super().__init__()
         self.names = np.array([
             'neck', 'nose', 'hip',
             'left_shoulder', 'left_elbow', 'left_wrist',
@@ -112,13 +141,14 @@ class PanopticJoints:
         return Common14Joints(self.names[common14_index_order])
 
 
-class Common14Joints:
+class Common14Joints(AbstractJointSet):
     def __init__(self, names=np.array([
         'hip', 'right_hip', 'right_knee',
         'right_ankle', 'left_hip', 'left_knee',
         'left_ankle', 'neck', 'left_shoulder', 'left_elbow',
         'left_wrist', 'right_shoulder', 'right_elbow', 'right_wrist'
     ])):
+        super().__init__()
         self.names = names
         self.number_of_joints = 14
         self.limb_graph = [
