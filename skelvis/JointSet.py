@@ -3,6 +3,14 @@ import k3d
 from abc import ABCMeta, abstractmethod
 
 
+def create_line_between_joints(start, end):
+    line = k3d.line(
+            vertices=[start, end],
+            shader='mesh',
+            width=0.1)
+    return line
+
+
 class AbstractJointSet(metaclass=ABCMeta):
     def __init__(self):
         self.limb_graph = None
@@ -15,15 +23,12 @@ class AbstractJointSet(metaclass=ABCMeta):
     def generate_skeleton_from_coordinates(self, joint_coordinates):
         assert joint_coordinates.shape == (self.number_of_joints, 3)
         joint_points = k3d.points(positions=joint_coordinates, point_size=0.4, shader='mesh')
-        lines = []
-        for line_indices in self.limb_graph:
-            lines.append(k3d.line(
-                vertices=[
-                    joint_coordinates[line_indices[0]],
-                    joint_coordinates[line_indices[1]]],
-                shader='mesh',
-                width=0.1))
-        return joint_points, lines
+        lines_between_joint_points = [line for line in map(
+            lambda line_indices: create_line_between_joints(
+                start=joint_coordinates[line_indices[0]],
+                end=joint_coordinates[line_indices[1]]),
+            self.limb_graph)]
+        return joint_points, lines_between_joint_points
 
 
 class MuPoTSJoints(AbstractJointSet):
