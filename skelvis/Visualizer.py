@@ -1,4 +1,5 @@
 import k3d
+from k3d import objects
 import numpy as np
 
 
@@ -19,9 +20,13 @@ class SkeletonVisualizer:
 
     def add_skeleton_to_plot(self, skeleton):
         joint_points, lines_between_joint_points = self.joint_set.generate_skeleton_from_coordinates(skeleton)
-        self.plot += joint_points
-        self.add_lines_to_plot(lines_between_joint_points)
+        skeleton_group = objects.Group()
+        skeleton_group += joint_points
+        for line in lines_between_joint_points:
+            skeleton_group += line
+        self.plot += skeleton_group
 
     def add_lines_to_plot(self, lines_between_joint_points):
         for line in lines_between_joint_points:
             self.plot += line
+
