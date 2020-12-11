@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name='skelvis',
-    version='0.18',
+    version='0.19',
     scripts=[],
     author="Peter Kovacs",
     author_email="petersmith77.sb@gmail.com",
@@ -14,6 +14,7 @@ setuptools.setup(
     long_description_content_type="text/markdown",
     url="https://github.com/ScarryBear77/skelvis",
     packages=setuptools.find_packages(),
+    install_requires=['k3d'],
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",
