@@ -3,12 +3,17 @@ import k3d
 from abc import ABCMeta, abstractmethod
 
 
-def create_line_between_joints(start, end):
+def create_line_between_joints(start, end, width):
     line = k3d.line(
             vertices=[start, end],
             shader='mesh',
-            width=0.1)
+            width=width)
     return line
+
+
+def calculate_size_from_joint_coordinates(joint_coordinates):
+    absolute_max_value = abs(joint_coordinates).max()
+    return absolute_max_value / 10000.0
 
 
 class AbstractJointSet(metaclass=ABCMeta):
@@ -22,11 +27,13 @@ class AbstractJointSet(metaclass=ABCMeta):
 
     def generate_skeleton_from_coordinates(self, joint_coordinates):
         assert joint_coordinates.shape == (self.number_of_joints, 3)
-        joint_points = k3d.points(positions=joint_coordinates, point_size=0.4, shader='mesh')
+        size = calculate_size_from_joint_coordinates(joint_coordinates)
+        joint_points = k3d.points(positions=joint_coordinates, point_size=size, shader='mesh')
         lines_between_joint_points = [line for line in map(
             lambda line_indices: create_line_between_joints(
                 start=joint_coordinates[line_indices[0]],
-                end=joint_coordinates[line_indices[1]]),
+                end=joint_coordinates[line_indices[1]],
+                width=size / 4.0),
             self.limb_graph)]
         return joint_points, lines_between_joint_points
 
@@ -157,11 +164,11 @@ class Common14Joints(AbstractJointSet):
         self.names = names
         self.number_of_joints = 14
         self.limb_graph = [
-            (0, 1), (1, 2), (2, 3),     # right leg
-            (0, 4), (4, 5), (5, 6),     # left leg
-            (0, 7),                     # spine
-            (7, 8), (8, 9), (9, 10),    # left arm
-            (7, 11), (11, 12), (12, 13) # right arm
+            (0, 1), (1, 2), (2, 3),      # right leg
+            (0, 4), (4, 5), (5, 6),      # left leg
+            (0, 7),                      # spine
+            (7, 8), (8, 9), (9, 10),     # left arm
+            (7, 11), (11, 12), (12, 13)  # right arm
         ]
         self.names.flags.writeable = False
         self.sidedness = [0, 0, 0, 1, 1, 1, 2, 1, 1, 1, 0, 0, 0]

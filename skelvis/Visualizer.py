@@ -29,4 +29,3 @@ class SkeletonVisualizer:
     def add_lines_to_plot(self, lines_between_joint_points):
         for line in lines_between_joint_points:
             self.plot += line
-
