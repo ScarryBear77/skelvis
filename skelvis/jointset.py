@@ -1,19 +1,5 @@
 import numpy as np
-import k3d
-from k3d.plot import Plot
-from k3d.objects import Group, Line, Points
 from abc import ABCMeta, abstractmethod
-from typing import Union, NewType
-
-SkeletonPlot = NewType('SkeletonPlot', Union[Plot, type(None)])
-Color = NewType('Color', Union[str, int])
-
-
-class Skeleton:
-    def __init__(self, joint_coordinates: np.ndarray, part_size: float, color: Color):
-        self.joint_coordinates = joint_coordinates
-        self.part_size = part_size
-        self.color = color
 
 
 class JointSet(metaclass=ABCMeta):
@@ -21,51 +7,16 @@ class JointSet(metaclass=ABCMeta):
         self.names = None
         self.number_of_joints = None
         self.limb_graph = None
-        self.sidedness = None
+        self.left_joint_indices = None
+        self.right_joint_indices = None
+        self.center_joint_indices = None
+        self.left_line_indices = None
+        self.right_line_indices = None
+        self.center_line_indices = None
 
     @abstractmethod
     def convert_to_common_14(self):
         return None
-
-    def generate_skeleton_plot(self, skeleton: Skeleton) -> Group:
-        assert skeleton.joint_coordinates.shape == (self.number_of_joints, 3)
-        skeleton_joint_points = self.__create_skeleton_joint_points(skeleton)
-        skeleton_joint_lines = self.__create_skeleton_lines(skeleton)
-        skeleton_plot: Group = Group()
-        skeleton_plot += skeleton_joint_points
-        for line in skeleton_joint_lines:
-            skeleton_plot += line
-        return skeleton_plot
-
-    def __create_skeleton_lines(self, skeleton: Skeleton):
-        return [line for line in map(
-            lambda line_indices: self.__create_line_between_joints(
-                start=skeleton.joint_coordinates[line_indices[0]],
-                end=skeleton.joint_coordinates[line_indices[1]],
-                width=skeleton.part_size / 4.0,
-                color=self.__get_skeleton_color(skeleton)
-            ),
-            self.limb_graph)]
-
-    @staticmethod
-    def __create_line_between_joints(start: float, end: float, width: float, color: int) -> Line:
-        return k3d.line(
-            vertices=[start, end], shader='mesh',
-            width=width, color=color
-        )
-
-    def __create_skeleton_joint_points(self, skeleton: Skeleton) -> Points:
-        return k3d.points(
-            positions=skeleton.joint_coordinates, point_size=skeleton.part_size,
-            shader='mesh', color=self.__get_skeleton_color(skeleton)
-        )
-
-    @staticmethod
-    def __get_skeleton_color(skeleton: Skeleton) -> int:
-        if skeleton.color == 'default':
-            return 0x0000FF
-        else:
-            return skeleton.color
 
 
 class MuPoTSJoints(JointSet):
@@ -79,7 +30,7 @@ class MuPoTSJoints(JointSet):
             'LEFT HIP', 'LEFT KNEE', 'LEFT ANKLE',           # Left leg
             'HIP', 'SPINE', 'NOSE'                           # Spine
         ])
-        self.number_of_joints = 17
+        self.names.flags.writeable = False
         self.limb_graph = [
             (10, 9), (9, 8), (8, 14),       # Right leg
             (13, 12), (12, 11), (11, 14),   # Left leg
@@ -88,8 +39,13 @@ class MuPoTSJoints(JointSet):
             (4, 3), (3, 2), (2, 1),         # Right arm
             (7, 6), (6, 5), (5, 1),         # Left arm
         ]
-        self.names.flags.writeable = False
-        self.sidedness = [0, 0, 0, 1, 1, 1, 2, 2, 2, 2, 0, 0, 0, 1, 1, 1]
+        self.number_of_joints = 17
+        self.left_joint_indices = [5, 6, 7, 11, 12, 13]
+        self.right_joint_indices = [2, 3, 4, 8, 9, 10]
+        self.center_joint_indices = [0, 1, 14, 15, 16]
+        self.left_line_indices = [3, 4, 5, 13, 14, 15]
+        self.right_line_indices = [0, 1, 2, 10, 11, 12]
+        self.center_line_indices = [6, 7, 8, 9]
 
     def convert_to_common_14(self):
         common14_index_order = [14, 8, 9, 10, 11, 12, 13, 1, 5, 6, 7, 2, 3, 4]
@@ -110,6 +66,7 @@ class OpenPoseJoints(JointSet):
             'LEFT BIG TOE', 'LEFT SMALL TOE', 'LEFT HEEL',     # Left foot
             'RIGHT BIG TOE', 'RIGHT SMALL TOE', 'RIGHT HEEL'   # Right foot
         ])
+        self.names.flags.writeable = False
         self.limb_graph = [
             (1, 0), (17, 15), (15, 0), (16, 0), (18, 16),               # Head
             (4, 3), (3, 2), (2, 1),                                     # Right arm
@@ -119,7 +76,12 @@ class OpenPoseJoints(JointSet):
             (20, 19), (19, 14), (21, 14), (14, 13), (13, 12), (12, 8)   # Left leg
         ]
         self.number_of_joints = 25
-        self.names.flags.writeable = False
+        self.left_joint_indices = [5, 6, 7, 12, 13, 14, 16, 18, 19, 20, 21]
+        self.right_joint_indices = [2, 3, 4, 9, 10, 11, 15, 17, 22, 23, 34]
+        self.center_joint_indices = [0, 1, 8]
+        self.left_line_indices = [3, 4, 8, 9, 10, 18, 19, 20, 21, 22, 23]
+        self.right_line_indices = [1, 2, 5, 6, 7, 12, 13, 14, 15, 16, 17]
+        self.center_line_indices = [0, 11]
 
     def convert_to_common_14(self):
         common14_index_order = [8, 9, 10, 11, 12, 13, 14, 1, 5, 6, 7, 2, 3, 4]
@@ -145,7 +107,7 @@ class CocoExJoints(JointSet):
             'LEFT ANKLE', 'RIGHT ANKLE',        # Ankles
             'HIP', 'NECK'                       # Spine
         ])
-        self.number_of_joints = 19
+        self.names.flags.writeable = False
         self.limb_graph = [
             (0, 1), (1, 3),                 # Left face
             (0, 2), (2, 4),                 # Right face
@@ -155,8 +117,13 @@ class CocoExJoints(JointSet):
             (17, 11), (11, 13), (13, 15),   # Left leg
             (17, 12), (12, 14), (14, 16)    # Right leg
         ]
-        self.names.flags.writeable = False
-        self.sidedness = [1, 1, 0, 0, 2, 2, 1, 1, 1, 0, 0, 0, 1, 1, 1, 0, 0, 0]
+        self.number_of_joints = 19
+        self.left_joint_indices = [1, 3, 5, 7, 9, 11, 13, 15]
+        self.right_joint_indices = [2, 4, 6, 8, 10, 12, 14, 16]
+        self.center_joint_indices = [0, 17, 18]
+        self.left_line_indices = [0, 1, 6, 7, 8, 12, 13, 14]
+        self.right_line_indices = [2, 3, 9, 10, 11, 15, 16, 17]
+        self.center_line_indices = [4, 5]
 
     def convert_to_common_14(self):
         common14_index_order = [17, 12, 14, 16, 11, 13, 15, 18, 5, 7, 9, 6, 8, 10]
@@ -175,7 +142,7 @@ class PanopticJoints(JointSet):
             'LEFT EYE', 'LEFT EAR',                          # Left face
             'RIGHT EYE', 'RIGHT EAR'                         # Right face
         ])
-        self.number_of_joints = 19
+        self.names.flags.writeable = False
         self.limb_graph = [
             (0, 1), (0, 2),               # Spine
             (0, 3), (3, 4), (4, 5),       # Left arm
@@ -185,8 +152,13 @@ class PanopticJoints(JointSet):
             (1, 15), (15, 16),            # Left face
             (1, 17), (17, 18)             # Right face
         ]
-        self.names.flags.writeable = False
-        self.sidedness = [2, 2, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 2, 2, 2, 2]
+        self.number_of_joints = 19
+        self.left_joint_indices = [3, 4, 5, 6, 7, 8, 15, 16]
+        self.right_joint_indices = [9, 10, 11, 12, 13, 14, 17, 18]
+        self.center_joint_indices = [0, 1, 2]
+        self.left_line_indices = [2, 3, 4, 5, 6, 7, 14, 15]
+        self.right_line_indices = [8, 9, 10, 11, 12, 13, 16, 17]
+        self.center_line_indices = [0, 1]
 
     def convert_to_common_14(self):
         common14_index_order = [2, 12, 13, 14, 6, 7, 8, 0, 3, 4, 5, 9, 10, 11]
@@ -204,7 +176,7 @@ class Common14Joints(JointSet):
     ])):
         super().__init__()
         self.names = names
-        self.number_of_joints = 14
+        self.names.flags.writeable = False
         self.limb_graph = [
             (0, 1), (1, 2), (2, 3),      # Right leg
             (0, 4), (4, 5), (5, 6),      # Left leg
@@ -212,8 +184,13 @@ class Common14Joints(JointSet):
             (7, 8), (8, 9), (9, 10),     # Left arm
             (7, 11), (11, 12), (12, 13)  # Right arm
         ]
-        self.names.flags.writeable = False
-        self.sidedness = [0, 0, 0, 1, 1, 1, 2, 1, 1, 1, 0, 0, 0]
+        self.number_of_joints = 14
+        self.left_joint_indices = [4, 5, 6, 8, 9, 10]
+        self.right_joint_indices = [1, 2, 3, 11, 12, 13]
+        self.center_joint_indices = [0, 7]
+        self.left_line_indices = [3, 4, 5, 7, 8, 9]
+        self.right_line_indices = [0, 1, 2, 10, 11, 12]
+        self.center_line_indices = [6]
 
     def convert_to_common_14(self):
         return Common14Joints(names=self.names)
