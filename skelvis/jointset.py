@@ -1,61 +1,74 @@
 import numpy as np
 import k3d
-from k3d import objects
+from k3d.plot import Plot
+from k3d.objects import Group, Line, Points
 from abc import ABCMeta, abstractmethod
+from typing import Union, NewType
+
+SkeletonPlot = NewType('SkeletonPlot', Union[Plot, type(None)])
+Color = NewType('Color', Union[str, int])
 
 
-def get_skeleton_color(skeleton):
-    if skeleton.color == 'default':
-        return 0x0000FF
-    else:
-        return skeleton.color
+class Skeleton:
+    def __init__(self, joint_coordinates: np.ndarray, part_size: float, color: Color):
+        self.joint_coordinates = joint_coordinates
+        self.part_size = part_size
+        self.color = color
 
 
-def create_skeleton_joint_points(skeleton):
-    return k3d.points(
-            positions=skeleton.joint_coordinates, point_size=skeleton.part_size,
-            shader='mesh', color=get_skeleton_color(skeleton)
-        )
-
-
-def create_skeleton_lines(skeleton, limb_graph):
-    return [line for line in map(
-            lambda line_indices: create_line_between_joints(
-                start=skeleton.joint_coordinates[line_indices[0]],
-                end=skeleton.joint_coordinates[line_indices[1]],
-                width=skeleton.part_size / 4.0, color=get_skeleton_color(skeleton)
-            ),
-            limb_graph)]
-
-
-def create_line_between_joints(start, end, width, color):
-    return k3d.line(
-        vertices=[start, end], shader='mesh',
-        width=width, color=color
-    )
-
-
-class AbstractJointSet(metaclass=ABCMeta):
+class JointSet(metaclass=ABCMeta):
     def __init__(self):
-        self.limb_graph = None
+        self.names = None
         self.number_of_joints = None
+        self.limb_graph = None
+        self.sidedness = None
 
     @abstractmethod
     def convert_to_common_14(self):
         return None
 
-    def generate_skeleton_plot(self, skeleton):
+    def generate_skeleton_plot(self, skeleton: Skeleton) -> Group:
         assert skeleton.joint_coordinates.shape == (self.number_of_joints, 3)
-        joint_points = create_skeleton_joint_points(skeleton)
-        lines_between_joint_points = create_skeleton_lines(skeleton, self.limb_graph)
-        skeleton_plot = objects.Group()
-        skeleton_plot += joint_points
-        for line in lines_between_joint_points:
+        skeleton_joint_points = self.__create_skeleton_joint_points(skeleton)
+        skeleton_joint_lines = self.__create_skeleton_lines(skeleton)
+        skeleton_plot: Group = Group()
+        skeleton_plot += skeleton_joint_points
+        for line in skeleton_joint_lines:
             skeleton_plot += line
         return skeleton_plot
 
+    def __create_skeleton_lines(self, skeleton: Skeleton):
+        return [line for line in map(
+            lambda line_indices: self.__create_line_between_joints(
+                start=skeleton.joint_coordinates[line_indices[0]],
+                end=skeleton.joint_coordinates[line_indices[1]],
+                width=skeleton.part_size / 4.0,
+                color=self.__get_skeleton_color(skeleton)
+            ),
+            self.limb_graph)]
 
-class MuPoTSJoints(AbstractJointSet):
+    @staticmethod
+    def __create_line_between_joints(start: float, end: float, width: float, color: int) -> Line:
+        return k3d.line(
+            vertices=[start, end], shader='mesh',
+            width=width, color=color
+        )
+
+    def __create_skeleton_joint_points(self, skeleton: Skeleton) -> Points:
+        return k3d.points(
+            positions=skeleton.joint_coordinates, point_size=skeleton.part_size,
+            shader='mesh', color=self.__get_skeleton_color(skeleton)
+        )
+
+    @staticmethod
+    def __get_skeleton_color(skeleton: Skeleton) -> int:
+        if skeleton.color == 'default':
+            return 0x0000FF
+        else:
+            return skeleton.color
+
+
+class MuPoTSJoints(JointSet):
     def __init__(self):
         super().__init__()
         self.names = np.array([
@@ -83,7 +96,7 @@ class MuPoTSJoints(AbstractJointSet):
         return Common14Joints(names=self.names[common14_index_order])
 
 
-class OpenPoseJoints(AbstractJointSet):
+class OpenPoseJoints(JointSet):
     def __init__(self):
         super().__init__()
         self.names = np.array([
@@ -117,7 +130,7 @@ class OpenPoseJoints(AbstractJointSet):
         return self.names[stable_joint_indices]
 
 
-class CocoExJoints(AbstractJointSet):
+class CocoExJoints(JointSet):
     def __init__(self):
         super().__init__()
         self.names = np.array([
@@ -150,7 +163,7 @@ class CocoExJoints(AbstractJointSet):
         return Common14Joints(names=self.names[common14_index_order])
 
 
-class PanopticJoints(AbstractJointSet):
+class PanopticJoints(JointSet):
     def __init__(self):
         super().__init__()
         self.names = np.array([
@@ -180,7 +193,7 @@ class PanopticJoints(AbstractJointSet):
         return Common14Joints(self.names[common14_index_order])
 
 
-class Common14Joints(AbstractJointSet):
+class Common14Joints(JointSet):
     def __init__(self, names=np.array([
         'HIP',                                          # Hip
         'RIGHT HIP', 'RIGHT KNEE', 'RIGHT ANKLE',       # Right leg

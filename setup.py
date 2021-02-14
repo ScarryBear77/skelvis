@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name='skelvis',
-    version='0.26',
+    version='0.32',
     scripts=[],
     author="Peter Kovacs",
     author_email="petersmith77.sb@gmail.com",
