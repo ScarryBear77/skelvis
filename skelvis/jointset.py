@@ -4,19 +4,19 @@ from abc import ABCMeta, abstractmethod
 
 class JointSet(metaclass=ABCMeta):
     def __init__(self):
-        self.names = None
-        self.number_of_joints = None
-        self.limb_graph = None
-        self.left_joint_indices = None
-        self.right_joint_indices = None
-        self.center_joint_indices = None
-        self.left_line_indices = None
-        self.right_line_indices = None
-        self.center_line_indices = None
+        self.names: np.ndarray = np.array([])
+        self.number_of_joints: int = 0
+        self.limb_graph: list[tuple[int, int]] = []
+        self.left_joint_indices: list[int] = []
+        self.right_joint_indices: list[int] = []
+        self.center_joint_indices: list[int] = []
+        self.left_line_indices: list[int] = []
+        self.right_line_indices: list[int] = []
+        self.center_line_indices: list[int] = []
 
     @abstractmethod
     def convert_to_common_14(self):
-        return None
+        return self
 
 
 class MuPoTSJoints(JointSet):
