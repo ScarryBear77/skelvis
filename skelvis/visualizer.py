@@ -1,10 +1,12 @@
 import functools
-import numpy as np
+from typing import Union, NewType, Optional, List
+
 import k3d
+import numpy as np
 from k3d.objects import Group, Line, Points
 from k3d.plot import Plot
+
 from .jointset import JointSet, MuPoTSJoints, OpenPoseJoints, CocoExJoints, PanopticJoints, Common14Joints
-from typing import Union, NewType, Optional
 
 SkeletonPlot = NewType('SkeletonPlot', Optional[Plot])
 SkeletonObject = NewType('SkeletonObject', Optional[Group])
@@ -61,7 +63,7 @@ class Skeleton:
             shader='mesh', colors=skeleton_joint_colors
         )
 
-    def get_joint_lines(self) -> list[Line]:
+    def get_joint_lines(self) -> List[Line]:
         skeleton_line_colors = self.get_line_colors()
         return [self.__create_line_between_joints(
             start=self.joint_coordinates[self.joint_set.limb_graph[i][0]],
@@ -84,7 +86,7 @@ class SkeletonVisualizer:
         self.plot: SkeletonPlot = None
         self.size_scalar: float = size_scalar
 
-    def visualize(self, skeletons: np.ndarray, colors: list[Color] = None):
+    def visualize(self, skeletons: np.ndarray, colors: List[Color] = None):
         self.__assert_visualization_arguments(skeletons, colors)
         number_of_skeletons = skeletons.shape[0]
         if colors is None:
@@ -92,14 +94,14 @@ class SkeletonVisualizer:
         self.plot = self.__create_skeleton_plot(skeletons, colors)
         self.plot.display()
 
-    def __assert_visualization_arguments(self, skeletons: np.ndarray, colors: list[Color]):
+    def __assert_visualization_arguments(self, skeletons: np.ndarray, colors: List[Color]):
         assert len(skeletons.shape) == 3, 'The \'skeletons\' parameter should be a 3 dimensional numpy array.'
         if colors is not None:
             assert skeletons.shape[0] == len(colors)
         assert skeletons.shape[1] == self.joint_set.number_of_joints
         assert skeletons.shape[2] == 3
 
-    def __create_skeleton_plot(self, skeletons: np.ndarray, colors: list[Color]) -> SkeletonPlot:
+    def __create_skeleton_plot(self, skeletons: np.ndarray, colors: List[Color]) -> SkeletonPlot:
         skeleton_part_size = self.__calculate_skeleton_part_size(skeletons)
         skeleton_plot = k3d.plot()
         for skeleton in map(

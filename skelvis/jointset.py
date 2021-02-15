@@ -1,3 +1,5 @@
+from typing import Tuple, List
+
 import numpy as np
 from abc import ABCMeta, abstractmethod
 
@@ -6,13 +8,13 @@ class JointSet(metaclass=ABCMeta):
     def __init__(self):
         self.names: np.ndarray = np.array([])
         self.number_of_joints: int = 0
-        self.limb_graph: list[tuple[int, int]] = []
-        self.left_joint_indices: list[int] = []
-        self.right_joint_indices: list[int] = []
-        self.center_joint_indices: list[int] = []
-        self.left_line_indices: list[int] = []
-        self.right_line_indices: list[int] = []
-        self.center_line_indices: list[int] = []
+        self.limb_graph: List[Tuple[int, int]] = []
+        self.left_joint_indices: List[int] = []
+        self.right_joint_indices: List[int] = []
+        self.center_joint_indices: List[int] = []
+        self.left_line_indices: List[int] = []
+        self.right_line_indices: List[int] = []
+        self.center_line_indices: List[int] = []
 
     @abstractmethod
     def convert_to_common_14(self):
@@ -162,7 +164,7 @@ class PanopticJoints(JointSet):
 
     def convert_to_common_14(self):
         common14_index_order = [2, 12, 13, 14, 6, 7, 8, 0, 3, 4, 5, 9, 10, 11]
-        return Common14Joints(self.names[common14_index_order])
+        return Common14Joints(names=self.names[common14_index_order])
 
 
 class Common14Joints(JointSet):
