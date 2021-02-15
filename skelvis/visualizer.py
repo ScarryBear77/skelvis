@@ -1,9 +1,9 @@
 import functools
-from typing import Union, NewType, Optional, List
+from typing import Union, NewType, Optional, List, Dict, Final
 
 import k3d
 import numpy as np
-from k3d.objects import Group, Line, Points
+from k3d.objects import Group, Line, Points, Text, Drawable
 from k3d.plot import Plot
 
 from .jointset import JointSet, MuPoTSJoints, OpenPoseJoints, CocoExJoints, PanopticJoints, Common14Joints
@@ -11,6 +11,12 @@ from .jointset import JointSet, MuPoTSJoints, OpenPoseJoints, CocoExJoints, Pano
 SkeletonPlot = NewType('SkeletonPlot', Optional[Plot])
 SkeletonObject = NewType('SkeletonObject', Optional[Group])
 Color = NewType('Color', Union[str, int])
+
+DEFAULT_COLORS: Final[Dict[str, int]] = {
+    'red': 0xFF0000, 'green': 0x00FF00,  'blue': 0x0000FF,
+    'yellow': 0xFFFF00, 'teal': 0x00FFFF, 'purple': 0xFF00FF,
+    'white': 0xFFFFFF, 'black': 0x000000
+}
 
 
 class Skeleton:
@@ -23,12 +29,13 @@ class Skeleton:
 
     def to_skeleton_object(self) -> SkeletonObject:
         joint_points = self.get_joint_points()
-        joint_lines = self.get_joint_lines()
+        joint_lines: List[Drawable] = self.get_joint_lines()
+        joint_names: List[Drawable] = self.get_joint_names()
         skeleton_object: SkeletonObject = SkeletonObject(Group())
         skeleton_object += joint_points
         return functools.reduce(
             lambda _skeleton_object, _skeleton_part: _skeleton_object + _skeleton_part,
-            joint_lines,
+            joint_lines + joint_names,
             skeleton_object
         )
 
@@ -69,8 +76,17 @@ class Skeleton:
             start=self.joint_coordinates[self.joint_set.limb_graph[i][0]],
             end=self.joint_coordinates[self.joint_set.limb_graph[i][1]],
             width=self.part_size / 4.0,
-            color=int(skeleton_line_colors[i])
-        ) for i in range(len(self.joint_set.limb_graph))]
+            color=int(skeleton_line_colors[i]))
+            for i in range(len(self.joint_set.limb_graph))
+        ]
+
+    def get_joint_names(self) -> List[Text]:
+        return [k3d.text(
+            text=self.joint_set.names[i],
+            position=self.joint_coordinates[i],
+            size=0.45, label_box=False, color=DEFAULT_COLORS.get('black'))
+            for i in range(self.joint_set.number_of_joints)
+        ]
 
     @staticmethod
     def __create_line_between_joints(start: float, end: float, width: float, color: int) -> Line:
@@ -97,9 +113,11 @@ class SkeletonVisualizer:
     def __assert_visualization_arguments(self, skeletons: np.ndarray, colors: List[Color]):
         assert len(skeletons.shape) == 3, 'The \'skeletons\' parameter should be a 3 dimensional numpy array.'
         if colors is not None:
-            assert skeletons.shape[0] == len(colors)
-        assert skeletons.shape[1] == self.joint_set.number_of_joints
-        assert skeletons.shape[2] == 3
+            assert skeletons.shape[0] == len(colors),\
+                'The \'skeletons\' and \'colors\' parameters must be the same length.'
+        assert skeletons.shape[1] == self.joint_set.number_of_joints,\
+            'The number of joints of skeletons and the number of joints in the specified joint set must be the same.'
+        assert skeletons.shape[2] == 3, 'The skeleton joint coordinates must be 3 dimensional'
 
     def __create_skeleton_plot(self, skeletons: np.ndarray, colors: List[Color]) -> SkeletonPlot:
         skeleton_part_size = self.__calculate_skeleton_part_size(skeletons)
