@@ -16,9 +16,11 @@ DEFAULT_COLORS: Final[Dict[str, int]] = {
 
 
 class DrawableSkeleton(Group):
-    def __init__(self, joint_points: Points, joint_lines: List[Line], joint_names: List[Text]):
+    def __init__(self, joint_points: Points, joint_lines: List[Line], joint_names: List[Text] = None):
         points: List[Drawable] = [joint_points]
-        drawable_objects: List[Drawable] = points + joint_lines + joint_names
+        drawable_objects: List[Drawable] = points + joint_lines
+        if joint_names is not None:
+            drawable_objects += joint_names
         super().__init__(drawable_objects)
         self.joint_points: Points = joint_points
         self.joint_lines: List[Line] = joint_lines
@@ -34,6 +36,11 @@ class Skeleton:
         self.color: Color = color
 
     def to_drawable_skeleton(self) -> DrawableSkeleton:
+        joint_points = self.get_joint_points()
+        joint_lines: List[Line] = self.get_joint_lines()
+        return DrawableSkeleton(joint_points, joint_lines)
+
+    def to_drawable_skeleton_with_names(self) -> DrawableSkeleton:
         joint_points = self.get_joint_points()
         joint_lines: List[Line] = self.get_joint_lines()
         joint_names: List[Text] = self.get_joint_names()
@@ -70,8 +77,10 @@ class Skeleton:
                 return DEFAULT_COLORS.get(color)
             else:
                 raise KeyError('Default colors do not contain ' + color + '.')
-        else:
+        elif isinstance(color, int):
             return color
+        else:
+            raise TypeError('Color must be either of type \'int\' or \'str\'.')
 
     def get_joint_points(self) -> Points:
         skeleton_joint_colors = self.get_joint_colors()

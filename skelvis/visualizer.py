@@ -18,26 +18,45 @@ class SkeletonVisualizer:
         self.skeletons: List[DrawableSkeleton] = []
         self.joint_names_visible = widgets.Checkbox(description="Show Joint Names")
 
+    def visualize_video(self, frames: np.ndarray, colors: List[Color] = None):
+        assert len(frames.shape) == 4
+        first_frame = frames[0]
+        self.__assert_skeleton_shapes(first_frame)
+        colors = self.__init_colors(frames.shape[1], colors)
+        self.plot = self.__create_skeleton_plot(first_frame, colors)
+        self.plot.display()
+
     def visualize(self, skeletons: np.ndarray, colors: List[Color] = None):
-        self.__assert_visualization_arguments(skeletons, colors)
-        number_of_skeletons = skeletons.shape[0]
-        if colors is None:
-            colors = ['default' for _ in range(number_of_skeletons)]
+        self.__assert_skeleton_shapes(skeletons)
+        colors = self.__init_colors(skeletons.shape[0], colors)
         self.plot = self.__create_skeleton_plot(skeletons, colors)
+        self.plot.display()
+
+    def visualize_with_names(self, skeletons: np.ndarray, colors: List[Color] = None):
+        self.__assert_skeleton_shapes(skeletons)
+        colors = self.__init_colors(skeletons.shape[0], colors)
+        self.plot = self.__create_skeleton_plot(skeletons, colors, include_names=True)
         self.__link_joint_name_visibility_with_checkbox()
         self.plot.display()
         display(self.joint_names_visible)
 
-    def __assert_visualization_arguments(self, skeletons: np.ndarray, colors: List[Color]):
-        assert len(skeletons.shape) == 3, 'The \'skeletons\' parameter should be a 3 dimensional numpy array.'
-        if colors is not None:
-            assert skeletons.shape[0] == len(colors),\
+    @staticmethod
+    def __init_colors(number_of_skeletons: int, colors: List[Color]):
+        if colors is None:
+            colors = ['default' for _ in range(number_of_skeletons)]
+        else:
+            assert number_of_skeletons == len(colors), \
                 'The \'skeletons\' and \'colors\' parameters must be the same length.'
+        return colors
+
+    def __assert_skeleton_shapes(self, skeletons: np.ndarray):
+        assert len(skeletons.shape) == 3, 'The \'skeletons\' parameter should be a 3 dimensional numpy array.'
         assert skeletons.shape[1] == self.joint_set.number_of_joints,\
             'The number of joints of skeletons and the number of joints in the specified joint set must be the same.'
         assert skeletons.shape[2] == 3, 'The skeleton joint coordinates must be 3 dimensional'
 
-    def __create_skeleton_plot(self, skeletons: np.ndarray, colors: List[Color]) -> Optional[Plot]:
+    def __create_skeleton_plot(self, skeletons: np.ndarray,
+                               colors: List[Color], include_names: bool = False) -> Optional[Plot]:
         skeleton_part_size = self.__calculate_skeleton_part_size(skeletons)
         skeleton_plot = k3d.plot()
         for skeleton in map(
@@ -47,7 +66,10 @@ class SkeletonVisualizer:
                     part_size=skeleton_part_size,
                     color=skeleton_color_tuple[1]),
                 zip(skeletons, colors)):
-            drawable_skeleton = skeleton.to_drawable_skeleton()
+            if include_names:
+                drawable_skeleton = skeleton.to_drawable_skeleton_with_names()
+            else:
+                drawable_skeleton = skeleton.to_drawable_skeleton()
             skeleton_plot += drawable_skeleton
             self.skeletons.append(drawable_skeleton)
         return skeleton_plot
