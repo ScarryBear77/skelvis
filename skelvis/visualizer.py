@@ -38,7 +38,6 @@ class FrameUpdater:
             self.video_player.value -= 1
 
 
-
 class SkeletonVisualizer:
     def __init__(self, joint_set: JointSet, size_scalar: float = 1.0):
         self.joint_set: JointSet = joint_set
@@ -47,49 +46,47 @@ class SkeletonVisualizer:
         self.skeletons: List[DrawableSkeleton] = []
         self.joint_names_visible = widgets.Checkbox(description="Show Joint Names")
 
-    def visualize_video_from_file(self, file_name: str, colors: List[Color] = None, fps: int = 15) -> None:
+    def visualize_video_from_file(
+            self, file_name: str, colors: List[Color] = None,
+            fps: int = 15, include_names: bool = False) -> None:
         file = open(file_name, 'rb')
         frames = pickle.load(file)
         file.close()
-        self.visualize_video(frames, colors, fps)
+        self.visualize_video(frames, colors, fps, include_names)
 
-    def visualize_video(self, frames: np.ndarray, colors: List[Color] = None, fps: int = 15) -> None:
+    def visualize_video(
+            self, frames: np.ndarray, colors: List[Color] = None,
+            fps: int = 15, include_names: bool = False) -> None:
         assert len(frames.shape) == 4
         first_frame = frames[0]
-        self.__assert_skeleton_shapes(first_frame)
-        colors = self.__init_colors(frames.shape[1], colors)
-        self.plot = self.__create_skeleton_plot(first_frame, colors)
+        self.visualize(first_frame, colors, include_names)
+        self.__display_video_player(fps, frames)
+
+    def visualize(self, skeletons: np.ndarray, colors: List[Color] = None, include_names: bool = False) -> None:
+        self.__assert_skeleton_shapes(skeletons)
+        colors = self.__init_colors(skeletons.shape[0], colors)
+        self.plot = self.__create_skeleton_plot(skeletons, colors, include_names)
         self.plot.display()
+        if include_names:
+            self.__link_joint_name_visibility_with_checkbox()
+            display(self.joint_names_visible)
+
+    def __display_video_player(self, fps, frames):
         video_player: Play = Play(
             value=0,
             min=0, max=frames.shape[0] - 1,
-            step=1, interval = 1000 / fps,
+            step=1, interval=1000 / fps,
             description='Press play', disabled=False
         )
         frame_updater = FrameUpdater(self.skeletons, frames, self.joint_set, video_player)
         video_player.observe(frame_updater.update_plot, names='value')
-        frame_slider = widgets.IntSlider(value=0, min=0, max=frames.shape[0], step=1, description='Frame')
+        frame_slider = widgets.IntSlider(value=0, min=0, max=frames.shape[0] - 1, step=1, description='Frame')
         next_frame_button = widgets.Button(description='Next frame')
         next_frame_button.on_click(frame_updater.update_to_next_frame)
         previous_frame_button = widgets.Button(description='Prev frame')
         previous_frame_button.on_click(frame_updater.update_to_previous_frame)
         widgets.jslink((video_player, 'value'), (frame_slider, 'value'))
         display(widgets.HBox([video_player, previous_frame_button, frame_slider, next_frame_button]))
-
-
-    def visualize(self, skeletons: np.ndarray, colors: List[Color] = None) -> None:
-        self.__assert_skeleton_shapes(skeletons)
-        colors = self.__init_colors(skeletons.shape[0], colors)
-        self.plot = self.__create_skeleton_plot(skeletons, colors)
-        self.plot.display()
-
-    def visualize_with_names(self, skeletons: np.ndarray, colors: List[Color] = None) -> None:
-        self.__assert_skeleton_shapes(skeletons)
-        colors = self.__init_colors(skeletons.shape[0], colors)
-        self.plot = self.__create_skeleton_plot(skeletons, colors, include_names=True)
-        self.__link_joint_name_visibility_with_checkbox()
-        self.plot.display()
-        display(self.joint_names_visible)
 
     @staticmethod
     def __init_colors(number_of_skeletons: int, colors: List[Color]) -> List[Color]:
