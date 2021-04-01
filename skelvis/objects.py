@@ -86,7 +86,7 @@ class Skeleton:
         skeleton_joint_colors = self.get_joint_colors()
         return k3d.points(
             positions=self.joint_coordinates, point_size=self.part_size,
-            shader='mesh', colors=skeleton_joint_colors
+            shader='3d', colors=skeleton_joint_colors
         )
 
     def get_joint_lines(self) -> List[Line]:
@@ -110,6 +110,6 @@ class Skeleton:
     @staticmethod
     def __create_line_between_joints(start: float, end: float, width: float, color: int) -> Line:
         return k3d.line(
-            vertices=[start, end], shader='mesh',
+            vertices=[start, end], shader='thick',
             width=width, color=color
         )

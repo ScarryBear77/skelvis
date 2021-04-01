@@ -106,7 +106,9 @@ class SkeletonVisualizer:
     def __create_skeleton_plot(self, skeletons: np.ndarray,
                                colors: List[Color], include_names: bool = False) -> Optional[Plot]:
         skeleton_part_size = self.__calculate_skeleton_part_size(skeletons)
-        skeleton_plot = k3d.plot()
+        skeleton_plot = k3d.plot(antialias=0, background_color=0xDDDDDD, camera_auto_fit=False)
+        centroid: np.ndarray = self.__calculate_centroid(skeletons)
+        skeleton_plot.camera = [0, 0, 0, centroid[0], centroid[1], centroid[2], 0, -1, 0]
         for skeleton in map(
                 lambda skeleton_color_tuple: Skeleton(
                     joint_coordinates=skeleton_color_tuple[0],
@@ -125,6 +127,9 @@ class SkeletonVisualizer:
     def __calculate_skeleton_part_size(self, skeletons: np.ndarray) -> float:
         max_values = [abs(skeleton).max() for skeleton in skeletons]
         return (min(max_values) / 100.0) * self.size_scalar
+
+    def __calculate_centroid(self, skeletons: np.ndarray) -> np.ndarray:
+        return np.average(np.average(skeletons, axis=0), axis=0)
 
     def __link_joint_name_visibility_with_checkbox(self) -> None:
         for skeleton in self.skeletons:
