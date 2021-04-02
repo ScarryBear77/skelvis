@@ -15,7 +15,7 @@ class JointSet(metaclass=ABCMeta):
         self.left_line_indices: List[int] = []
         self.right_line_indices: List[int] = []
         self.center_line_indices: List[int] = []
-        self.top_line_indices: List[int] = []
+        self.vertically_aligned_line_indices: List[Tuple[int, int]] = []
 
     @abstractmethod
     def convert_to_common_14(self):
@@ -49,7 +49,10 @@ class MuPoTSJoints(JointSet):
         self.left_line_indices = [3, 4, 5, 13, 14, 15]
         self.right_line_indices = [0, 1, 2, 10, 11, 12]
         self.center_line_indices = [6, 7, 8, 9]
-        self.top_line_indices = [16, 0]
+        self.vertically_aligned_line_indices = [
+            (16, 0), (1, 16), (15, 1), (14, 15),
+            (13, 12), (12, 11), (10, 9), (9, 8)
+        ]
 
     def convert_to_common_14(self):
         common14_index_order = [14, 8, 9, 10, 11, 12, 13, 1, 5, 6, 7, 2, 3, 4]
@@ -86,7 +89,10 @@ class OpenPoseJoints(JointSet):
         self.left_line_indices = [3, 4, 8, 9, 10, 18, 19, 20, 21, 22, 23]
         self.right_line_indices = [1, 2, 5, 6, 7, 12, 13, 14, 15, 16, 17]
         self.center_line_indices = [0, 11]
-        self.top_line_indices = [0, 1]
+        self.vertically_aligned_line_indices = [
+            (1, 0), (8, 1), (11, 10), (10, 9),
+            (14, 13), (13, 12), (24, 11), (21, 14)
+        ]
 
     def convert_to_common_14(self):
         common14_index_order = [8, 9, 10, 11, 12, 13, 14, 1, 5, 6, 7, 2, 3, 4]
@@ -129,7 +135,10 @@ class CocoExJoints(JointSet):
         self.left_line_indices = [0, 1, 6, 7, 8, 12, 13, 14]
         self.right_line_indices = [2, 3, 9, 10, 11, 15, 16, 17]
         self.center_line_indices = [4, 5]
-        self.top_line_indices = [18, 0]
+        self.vertically_aligned_line_indices = [
+            (18, 0), (17, 18), (16, 14),
+            (14, 12), (15, 13), (13, 11)
+        ]
 
     def convert_to_common_14(self):
         common14_index_order = [17, 12, 14, 16, 11, 13, 15, 18, 5, 7, 9, 6, 8, 10]
@@ -165,7 +174,10 @@ class PanopticJoints(JointSet):
         self.left_line_indices = [2, 3, 4, 5, 6, 7, 14, 15]
         self.right_line_indices = [8, 9, 10, 11, 12, 13, 16, 17]
         self.center_line_indices = [0, 1]
-        self.top_line_indices = [0, 1]
+        self.vertically_aligned_line_indices = [
+            (0, 1), (2, 0), (8, 7),
+            (7, 6), (14, 13), (13, 12)
+        ]
 
     def convert_to_common_14(self):
         common14_index_order = [2, 12, 13, 14, 6, 7, 8, 0, 3, 4, 5, 9, 10, 11]
@@ -198,7 +210,7 @@ class Common14Joints(JointSet):
         self.left_line_indices = [3, 4, 5, 7, 8, 9]
         self.right_line_indices = [0, 1, 2, 10, 11, 12]
         self.center_line_indices = [6]
-        self.top_line_indices = [7, 0]
+        self.vertically_aligned_line_indices = [(7, 0), (3, 2), (2, 1), (6, 5), (5, 4)]
 
     def convert_to_common_14(self):
         return Common14Joints(names=self.names)

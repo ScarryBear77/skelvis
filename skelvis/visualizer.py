@@ -129,9 +129,11 @@ class SkeletonVisualizer:
 
     def __adjust_camera_starting_position(self, skeletons: np.ndarray, skeleton_plot: Plot) -> None:
         centroid: np.ndarray = np.average(np.average(skeletons, axis=0), axis=0)
-        camera_up_vector: np.ndarray = np.sum(
-            skeletons[:, self.joint_set.top_line_indices[1]] - skeletons[:, self.joint_set.top_line_indices[0]],
-            axis=0)
+        camera_up_vector: np.ndarray = np.zeros(shape=(3,))
+        for line_indices in self.joint_set.vertically_aligned_line_indices:
+            camera_up_vector += np.sum(
+                skeletons[:, line_indices[1]] - skeletons[:, line_indices[0]],
+                axis=0)
         camera_up_vector /= np.linalg.norm(camera_up_vector, ord=2)
         skeleton_plot.camera = [
             0, 0, 0,
