@@ -107,8 +107,7 @@ class SkeletonVisualizer:
                                colors: List[Color], include_names: bool = False) -> Optional[Plot]:
         skeleton_part_size = self.__calculate_skeleton_part_size(skeletons)
         skeleton_plot = k3d.plot(antialias=0, background_color=0xDDDDDD, camera_auto_fit=False)
-        centroid: np.ndarray = self.__calculate_centroid(skeletons)
-        skeleton_plot.camera = [0, 0, 0, centroid[0], centroid[1], centroid[2], 0, -1, 0]
+        self.__adjust_camera_starting_position(skeletons, skeleton_plot)
         for skeleton in map(
                 lambda skeleton_color_tuple: Skeleton(
                     joint_coordinates=skeleton_color_tuple[0],
@@ -128,8 +127,16 @@ class SkeletonVisualizer:
         max_values = [abs(skeleton).max() for skeleton in skeletons]
         return (min(max_values) / 100.0) * self.size_scalar
 
-    def __calculate_centroid(self, skeletons: np.ndarray) -> np.ndarray:
-        return np.average(np.average(skeletons, axis=0), axis=0)
+    def __adjust_camera_starting_position(self, skeletons: np.ndarray, skeleton_plot: Plot) -> None:
+        centroid: np.ndarray = np.average(np.average(skeletons, axis=0), axis=0)
+        camera_up_vector: np.ndarray = np.sum(
+            skeletons[:, self.joint_set.top_line_indices[1]] - skeletons[:, self.joint_set.top_line_indices[0]],
+            axis=0)
+        camera_up_vector /= np.linalg.norm(camera_up_vector, ord=2)
+        skeleton_plot.camera = [
+            0, 0, 0,
+            centroid[0], centroid[1], centroid[2],
+            camera_up_vector[0], camera_up_vector[1], camera_up_vector[2]]
 
     def __link_joint_name_visibility_with_checkbox(self) -> None:
         for skeleton in self.skeletons:
