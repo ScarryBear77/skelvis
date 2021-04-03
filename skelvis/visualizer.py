@@ -65,7 +65,7 @@ class SkeletonVisualizer:
         skeleton_timestamps: List[Dict[str, np.ndarray]] = self.__get_skeleton_positions_timestamps(frames)
         self.__assert_include_arguments(include_names, include_coordinates)
         if include_names:
-            skeleton_converter = None
+            skeleton_converter = Skeleton.to_drawable_skeleton_for_video_with_names
         elif include_coordinates:
             skeleton_converter = Skeleton.to_drawable_skeleton_for_video_with_coordinates
         else:
@@ -81,8 +81,7 @@ class SkeletonVisualizer:
         return [{
             str(timestamp_index): frames_swapped[current_frame_index][timestamp_index]
             for timestamp_index in range(len(frames_swapped[current_frame_index]))
-        } for current_frame_index in range(len(frames_swapped))
-        ]
+        } for current_frame_index in range(len(frames_swapped))]
 
     def __create_skeleton_plot(self, skeletons: np.ndarray, skeleton_converter: Callable[[Skeleton], DrawableSkeleton],
                                colors: List[Color], positions: Optional[Positions] = None) -> None:
@@ -131,8 +130,7 @@ class SkeletonVisualizer:
             value=0,
             min=0, max=frames.shape[0] - 1,
             step=1, interval=1000 / fps,
-            description='Press play', disabled=False
-        )
+            description='Press play', disabled=False)
         frame_updater = FrameUpdater(video_player)
         frame_slider = IntSlider(value=0, min=0, max=frames.shape[0] - 1, step=1, description='Frame')
         next_frame_button = Button(description='Next frame')
