@@ -48,22 +48,28 @@ class Skeleton:
         joint_lines: List[Line] = self.__get_joint_lines()
         return DrawableSkeleton(joint_points, joint_lines)
 
-    def to_drawable_skeleton_with_coordinates(self) -> DrawableSkeleton:
-        joint_points: Points = self.__get_joint_points()
-        joint_lines: List[Line] = self.__get_joint_lines()
-        joint_coordinates: List[Text] = self.__get_joint_coordinates()
-        return DrawableSkeleton(joint_points, joint_lines, joint_coordinates=joint_coordinates)
-
     def to_drawable_skeleton_with_names(self) -> DrawableSkeleton:
         joint_points: Points = self.__get_joint_points()
         joint_lines: List[Line] = self.__get_joint_lines()
         joint_names: List[Text] = self.__get_joint_names()
         return DrawableSkeleton(joint_points, joint_lines, joint_names=joint_names)
 
+    def to_drawable_skeleton_with_coordinates(self) -> DrawableSkeleton:
+        joint_points: Points = self.__get_joint_points()
+        joint_lines: List[Line] = self.__get_joint_lines()
+        joint_coordinates: List[Text] = self.__get_joint_coordinates()
+        return DrawableSkeleton(joint_points, joint_lines, joint_coordinates=joint_coordinates)
+
     def to_drawable_skeleton_for_video(self) -> DrawableSkeleton:
         joint_points: Points = self.__get_joint_points()
         joint_lines: List[Line] = self.__get_joint_lines_for_video()
         return DrawableSkeleton(joint_points, joint_lines)
+
+    def to_drawable_skeleton_for_video_with_names(self) -> DrawableSkeleton:
+        joint_points: Points = self.__get_joint_points()
+        joint_lines: List[Line] = self.__get_joint_lines_for_video()
+        joint_names: List[Text] = self.__get_joint_names_for_video()
+        return DrawableSkeleton(joint_points, joint_lines, joint_names=joint_names)
 
     def to_drawable_skeleton_for_video_with_coordinates(self) -> DrawableSkeleton:
         joint_points: Points = self.__get_joint_points()
@@ -75,8 +81,7 @@ class Skeleton:
         skeleton_joint_colors: np.ndarray = self.__get_joint_colors()
         return k3d.points(
             positions=self.joint_positions, point_size=self.part_size,
-            shader='mesh', colors=skeleton_joint_colors
-        )
+            shader='mesh', colors=skeleton_joint_colors)
 
     def __get_joint_lines(self) -> List[Line]:
         skeleton_line_colors: np.ndarray = self.__get_line_colors()
@@ -86,9 +91,8 @@ class Skeleton:
                 self.joint_positions[self.joint_set.limb_graph[line_index][1]]
             ], width=self.part_size / 2.2,
             color=int(skeleton_line_colors[line_index]),
-            shader='mesh')
-            for line_index in range(len(self.joint_set.limb_graph))
-        ]
+            shader='mesh'
+        ) for line_index in range(len(self.joint_set.limb_graph))]
 
     def __get_joint_lines_for_video(self) -> List[Line]:
         skeleton_line_colors: np.ndarray = self.__get_line_colors()
@@ -100,43 +104,48 @@ class Skeleton:
                 ]) for current_timestamp in self.joint_positions.items()
             }, width=self.part_size / 2.2,
             color=int(skeleton_line_colors[line_index]),
-            shader='mesh')
-            for line_index in range(len(self.joint_set.limb_graph))
-        ]
+            shader='mesh'
+        ) for line_index in range(len(self.joint_set.limb_graph))]
 
     def __get_joint_names(self) -> List[Text]:
         return [k3d.text(
-            text=self.joint_set.names[i],
-            position=self.joint_positions[i],
-            size=DEFAULT_TEXT_SIZE, label_box=False, color=DEFAULT_COLORS.get('black'))
-            for i in range(self.joint_set.number_of_joints)
-        ]
+            text=self.joint_set.names[joint_index],
+            position=self.joint_positions[joint_index],
+            size=DEFAULT_TEXT_SIZE, label_box=False, color=DEFAULT_COLORS.get('black')
+        ) for joint_index in range(self.joint_set.number_of_joints)]
+
+    def __get_joint_names_for_video(self) -> List[Text]:
+        return [k3d.text(
+            text=self.joint_set.names[joint_index],
+            position={
+                current_timestamp[0]: current_timestamp[1][joint_index]
+                for current_timestamp in self.joint_positions.items()
+            }, size=DEFAULT_TEXT_SIZE, label_box=False, color=DEFAULT_COLORS.get('black')
+        ) for joint_index in range(self.joint_set.number_of_joints)]
 
     def __get_joint_coordinates(self) -> List[Text]:
         return [k3d.text(
             text=COORDINATE_FORMAT.format(
-                self.joint_positions[i][0],
-                self.joint_positions[i][1],
-                self.joint_positions[i][2]
-            ), position= self.joint_positions[i],
-            size=DEFAULT_TEXT_SIZE, label_box=False, color=DEFAULT_COLORS.get('black'))
-            for i in range(self.joint_set.number_of_joints)
-        ]
+                self.joint_positions[joint_index][0],
+                self.joint_positions[joint_index][1],
+                self.joint_positions[joint_index][2]
+            ), position=self.joint_positions[joint_index],
+            size=DEFAULT_TEXT_SIZE, label_box=False, color=DEFAULT_COLORS.get('black')
+        ) for joint_index in range(self.joint_set.number_of_joints)]
 
     def __get_joint_coordinates_for_video(self) -> List[Text]:
         return [k3d.text(
             text={
                 current_timestamp[0]: COORDINATE_FORMAT.format(
-                    current_timestamp[1][i][0],
-                    current_timestamp[1][i][0],
-                    current_timestamp[1][i][0])
+                    current_timestamp[1][joint_index][0],
+                    current_timestamp[1][joint_index][0],
+                    current_timestamp[1][joint_index][0])
                 for current_timestamp in self.joint_positions.items()
             }, position={
-                current_timestamp[0]: current_timestamp[1][i]
+                current_timestamp[0]: current_timestamp[1][joint_index]
                 for current_timestamp in self.joint_positions.items()
-            }, size=DEFAULT_TEXT_SIZE, label_box=False, color=DEFAULT_COLORS.get('black'))
-            for i in range(self.joint_set.number_of_joints)
-        ]
+            }, size=DEFAULT_TEXT_SIZE, label_box=False, color=DEFAULT_COLORS.get('black')
+        ) for joint_index in range(self.joint_set.number_of_joints)]
 
     def __get_joint_colors(self) -> np.ndarray:
         joint_colors_shape: Tuple[int] = (self.joint_set.number_of_joints,)
@@ -147,8 +156,10 @@ class Skeleton:
             joint_colors[self.joint_set.center_joint_indices] = DEFAULT_COLORS.get('white')
             return joint_colors
         else:
-            return np.full(shape=joint_colors_shape,
-                           fill_value=self.__get_color(self.color), dtype='uint32')
+            return np.full(
+                shape=joint_colors_shape,
+                fill_value=self.__get_color(self.color),
+                dtype='uint32')
 
     def __get_line_colors(self) -> np.ndarray:
         line_colors_shape: Tuple[int] = (self.joint_set.number_of_joints - 1,)
@@ -162,8 +173,7 @@ class Skeleton:
             return np.full(
                 shape=line_colors_shape,
                 fill_value=self.__get_color(self.color),
-                dtype='uint32'
-            )
+                dtype='uint32')
 
     @staticmethod
     def __get_color(color: Color) -> int:
