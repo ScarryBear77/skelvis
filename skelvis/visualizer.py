@@ -5,7 +5,7 @@ import ipywidgets as widgets
 import k3d
 import numpy as np
 from IPython.display import display
-from ipywidgets import Play, Checkbox, IntSlider, Button
+from ipywidgets import Play, Checkbox, IntSlider, Button, ColorPicker, VBox, Tab
 from k3d.plot import Plot
 
 from .jointset import JointSet, MuPoTSJoints, OpenPoseJoints, CocoExJoints, PanopticJoints, Common14Joints
@@ -25,7 +25,42 @@ class FrameUpdater:
             self.video_player.value -= 1
 
 
+class ColorChanger:
+    def __init__(self, skeleton: DrawableSkeleton, left_color_picker: ColorPicker,
+                 right_color_picker: ColorPicker, center_color_picker: ColorPicker):
+        self.skeleton: DrawableSkeleton = skeleton
+        self.left_color_picker = left_color_picker
+        self.right_color_picker = right_color_picker
+        self.center_color_picker = center_color_picker
+
+    def update_left_objects(self, current_color):
+        for obj in self.skeleton.get_left_objects():
+            obj.color = self.__get_as_hex_int(current_color.new)
+
+    def update_right_objects(self, current_color):
+        for obj in self.skeleton.get_right_objects():
+            obj.color = self.__get_as_hex_int(current_color.new)
+
+    def update_center_objects(self, current_color):
+        for obj in self.skeleton.get_center_objects():
+            obj.color = self.__get_as_hex_int(current_color.new)
+
+    def update_all_objects(self, current_color):
+        new_color = current_color.new
+        for obj in self.skeleton:
+            obj.color = self.__get_as_hex_int(new_color)
+        self.left_color_picker.value = new_color
+        self.right_color_picker.value = new_color
+        self.center_color_picker.value = new_color
+
+    @staticmethod
+    def __get_as_hex_int(color: str):
+        return int(color.replace('#', '0x'), 16)
+
+
 class SkeletonVisualizer:
+    """ A 3D skeleton visualizer which can visualize skeletons in 3D plots."""
+
     def __init__(self, joint_set: JointSet, size_scalar: float = 1.0):
         self.joint_set: JointSet = joint_set
         self.plot: Optional[Plot] = None
@@ -36,9 +71,9 @@ class SkeletonVisualizer:
 
     def visualize(self, skeletons: np.ndarray, colors: List[Color] = None,
                   include_names: bool = False, include_coordinates: bool = False) -> None:
+        self.__assert_include_arguments(include_names, include_coordinates)
         self.__assert_skeleton_shapes(skeletons)
         colors = self.__init_colors(skeletons.shape[0], colors)
-        self.__assert_include_arguments(include_names, include_coordinates)
         if include_names:
             skeleton_converter = Skeleton.to_drawable_skeleton_with_names
         elif include_coordinates:
@@ -48,6 +83,7 @@ class SkeletonVisualizer:
         self.__create_skeleton_plot(skeletons, skeleton_converter, colors)
         self.plot.display()
         self.__display_checkboxes(include_names, include_coordinates)
+        self.__display_color_changer()
 
     def visualize_video_from_file(self, file_name: str, colors: List[Color] = None, fps: int = 15,
                                   include_names: bool = False, include_coordinates: bool = False) -> None:
@@ -58,12 +94,12 @@ class SkeletonVisualizer:
 
     def visualize_video(self, frames: np.ndarray, colors: List[Color] = None, fps: int = 15,
                         include_names: bool = False, include_coordinates: bool = False) -> None:
+        self.__assert_include_arguments(include_names, include_coordinates)
         assert len(frames.shape) == 4
         first_frame: np.ndarray = frames[0]
         self.__assert_skeleton_shapes(first_frame)
         colors = self.__init_colors(first_frame.shape[0], colors)
         skeleton_timestamps: List[Dict[str, np.ndarray]] = self.__get_skeleton_positions_timestamps(frames)
-        self.__assert_include_arguments(include_names, include_coordinates)
         if include_names:
             skeleton_converter = Skeleton.to_drawable_skeleton_for_video_with_names
         elif include_coordinates:
@@ -74,6 +110,7 @@ class SkeletonVisualizer:
         self.plot.display()
         self.__display_video_player(fps, frames)
         self.__display_checkboxes(include_names, include_coordinates)
+        self.__display_color_changer()
 
     @staticmethod
     def __get_skeleton_positions_timestamps(frames: np.ndarray) -> List[Dict[str, np.ndarray]]:
@@ -157,7 +194,7 @@ class SkeletonVisualizer:
         assert skeletons.shape[2] == 3, 'The skeleton joint coordinates must be 3 dimensional'
 
     @staticmethod
-    def __assert_include_arguments(include_names: bool, include_coordinates) -> None:
+    def __assert_include_arguments(include_names: bool, include_coordinates: bool) -> None:
         if include_names is True and include_coordinates is True:
             raise AttributeError('Either names or coordinates can be showed, but not both.')
 
@@ -178,6 +215,35 @@ class SkeletonVisualizer:
         for skeleton in self.skeletons:
             for joint_coordinate in skeleton.joint_coordinates:
                 widgets.jslink((joint_coordinate, 'visible'), (self.joint_coordinates_visible, 'value'))
+
+    def __display_color_changer(self):
+        children: List[VBox] = []
+        for skeleton in self.skeletons:
+            left_color_picker: ColorPicker = ColorPicker(
+                description='Left color:',
+                value=self.__get_as_html_color(skeleton.get_left_objects()[0].color))
+            right_color_picker: ColorPicker = ColorPicker(
+                description='Right color:',
+                value=self.__get_as_html_color(skeleton.get_right_objects()[0].color))
+            center_color_picker: ColorPicker = ColorPicker(
+                description='Center color:',
+                value=self.__get_as_html_color(skeleton.get_center_objects()[0].color))
+            all_color_picker: ColorPicker = ColorPicker(description='All color:', value='#ffffff')
+            color_changer: ColorChanger = ColorChanger(
+                skeleton, left_color_picker, right_color_picker, center_color_picker)
+            left_color_picker.observe(color_changer.update_left_objects, names='value')
+            right_color_picker.observe(color_changer.update_right_objects, names='value')
+            center_color_picker.observe(color_changer.update_center_objects, names='value')
+            all_color_picker.observe(color_changer.update_all_objects, names='value')
+            children.append(VBox([left_color_picker, right_color_picker, center_color_picker, all_color_picker]))
+        color_changer_widget: Tab = Tab(children=children)
+        for i in range(len(self.skeletons)):
+            color_changer_widget.set_title(i, 'Skeleton {:d} colors'.format(i + 1))
+        display(color_changer_widget)
+
+    @staticmethod
+    def __get_as_html_color(color: int):
+        return '{0:#0{1}x}'.format(color, 8).replace('0x', '#')
 
 
 class MuPoTSVisualizer(SkeletonVisualizer):

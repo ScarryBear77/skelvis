@@ -20,19 +20,37 @@ COORDINATE_FORMAT: Final[str] = '({:.2f}, {:.2f}, {:.2f})'
 
 
 class DrawableSkeleton(Group):
-    def __init__(self, joint_points: Points, joint_lines: List[Line],
+    def __init__(self, joint_set: JointSet, joint_points: List[Points], joint_lines: List[Line],
                  joint_names: List[Text] = None, joint_coordinates: List[Text] = None):
-        points: List[Drawable] = [joint_points]
-        drawable_objects: List[Drawable] = points + joint_lines
+        drawable_objects: List[Drawable] = joint_points + joint_lines
         if joint_names is not None:
             drawable_objects += joint_names
         if joint_coordinates is not None:
             drawable_objects += joint_coordinates
         super().__init__(drawable_objects)
-        self.joint_points: Points = joint_points
+        self.joint_set: JointSet = joint_set
+        self.joint_points: List[Points] = joint_points
         self.joint_lines: List[Line] = joint_lines
         self.joint_names: List[Text] = joint_names
         self.joint_coordinates: List[Text] = joint_coordinates
+
+    def get_left_objects(self) -> List[Drawable]:
+        return [self.joint_points[left_point_index]
+                for left_point_index in self.joint_set.left_joint_indices] + \
+               [self.joint_lines[left_line_index]
+                for left_line_index in self.joint_set.left_line_indices]
+
+    def get_right_objects(self) -> List[Drawable]:
+        return [self.joint_points[right_point_index]
+                for right_point_index in self.joint_set.right_joint_indices] + \
+               [self.joint_lines[right_line_index]
+                for right_line_index in self.joint_set.right_line_indices]
+
+    def get_center_objects(self) -> List[Drawable]:
+        return [self.joint_points[center_point_index]
+                for center_point_index in self.joint_set.center_joint_indices] + \
+               [self.joint_lines[center_line_index]
+                for center_line_index in self.joint_set.center_line_indices]
 
 
 class Skeleton:
@@ -44,44 +62,55 @@ class Skeleton:
         self.color: Color = color
 
     def to_drawable_skeleton(self) -> DrawableSkeleton:
-        joint_points: Points = self.__get_joint_points()
+        joint_points: List[Points] = self.__get_joint_points()
         joint_lines: List[Line] = self.__get_joint_lines()
-        return DrawableSkeleton(joint_points, joint_lines)
+        return DrawableSkeleton(self.joint_set, joint_points, joint_lines)
 
     def to_drawable_skeleton_with_names(self) -> DrawableSkeleton:
-        joint_points: Points = self.__get_joint_points()
+        joint_points: List[Points] = self.__get_joint_points()
         joint_lines: List[Line] = self.__get_joint_lines()
         joint_names: List[Text] = self.__get_joint_names()
-        return DrawableSkeleton(joint_points, joint_lines, joint_names=joint_names)
+        return DrawableSkeleton(self.joint_set, joint_points, joint_lines, joint_names=joint_names)
 
     def to_drawable_skeleton_with_coordinates(self) -> DrawableSkeleton:
-        joint_points: Points = self.__get_joint_points()
+        joint_points: List[Points] = self.__get_joint_points()
         joint_lines: List[Line] = self.__get_joint_lines()
         joint_coordinates: List[Text] = self.__get_joint_coordinates()
-        return DrawableSkeleton(joint_points, joint_lines, joint_coordinates=joint_coordinates)
+        return DrawableSkeleton(self.joint_set, joint_points, joint_lines, joint_coordinates=joint_coordinates)
 
     def to_drawable_skeleton_for_video(self) -> DrawableSkeleton:
-        joint_points: Points = self.__get_joint_points()
+        joint_points: List[Points] = self.__get_joint_points_for_video()
         joint_lines: List[Line] = self.__get_joint_lines_for_video()
-        return DrawableSkeleton(joint_points, joint_lines)
+        return DrawableSkeleton(self.joint_set, joint_points, joint_lines)
 
     def to_drawable_skeleton_for_video_with_names(self) -> DrawableSkeleton:
-        joint_points: Points = self.__get_joint_points()
+        joint_points: List[Points] = self.__get_joint_points_for_video()
         joint_lines: List[Line] = self.__get_joint_lines_for_video()
         joint_names: List[Text] = self.__get_joint_names_for_video()
-        return DrawableSkeleton(joint_points, joint_lines, joint_names=joint_names)
+        return DrawableSkeleton(self.joint_set, joint_points, joint_lines, joint_names=joint_names)
 
     def to_drawable_skeleton_for_video_with_coordinates(self) -> DrawableSkeleton:
-        joint_points: Points = self.__get_joint_points()
+        joint_points: List[Points] = self.__get_joint_points_for_video()
         joint_lines: List[Line] = self.__get_joint_lines_for_video()
         joint_coordinates: List[Text] = self.__get_joint_coordinates_for_video()
-        return DrawableSkeleton(joint_points, joint_lines, joint_coordinates=joint_coordinates)
+        return DrawableSkeleton(self.joint_set, joint_points, joint_lines, joint_coordinates=joint_coordinates)
 
-    def __get_joint_points(self) -> Points:
+    def __get_joint_points(self) -> List[Points]:
         skeleton_joint_colors: np.ndarray = self.__get_joint_colors()
-        return k3d.points(
-            positions=self.joint_positions, point_size=self.part_size,
-            shader='mesh', colors=skeleton_joint_colors)
+        return [k3d.points(
+            positions=self.joint_positions[line_index], point_size=self.part_size,
+            shader='mesh', color=int(skeleton_joint_colors[line_index])
+        ) for line_index in range(self.joint_set.number_of_joints)]
+
+    def __get_joint_points_for_video(self) -> List[Points]:
+        skeleton_joint_colors: np.ndarray = self.__get_joint_colors()
+        return [k3d.points(
+            positions={
+                current_timestamp[0]: current_timestamp[1][line_index]
+                for current_timestamp in self.joint_positions.items()
+            }, color=int(skeleton_joint_colors[line_index]),
+            point_size=self.part_size, shader='mesh'
+        ) for line_index in range(self.joint_set.number_of_joints)]
 
     def __get_joint_lines(self) -> List[Line]:
         skeleton_line_colors: np.ndarray = self.__get_line_colors()
@@ -138,8 +167,8 @@ class Skeleton:
             text={
                 current_timestamp[0]: COORDINATE_FORMAT.format(
                     current_timestamp[1][joint_index][0],
-                    current_timestamp[1][joint_index][0],
-                    current_timestamp[1][joint_index][0])
+                    current_timestamp[1][joint_index][1],
+                    current_timestamp[1][joint_index][2])
                 for current_timestamp in self.joint_positions.items()
             }, position={
                 current_timestamp[0]: current_timestamp[1][joint_index]
