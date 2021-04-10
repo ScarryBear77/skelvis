@@ -85,6 +85,18 @@ class SkeletonVisualizer:
         self.__display_checkboxes(include_names, include_coordinates)
         self.__display_color_changer()
 
+    def visualize_with_ground_truths(self, pred_skeletons: np.ndarray, gt_skeletons: np.ndarray,
+                                     pred_colors: List[Color] = None, gt_colors: List[Color] = None,
+                                     include_names: bool = False, include_coordinates: bool = False,
+                                     automatic_camera_orientation: bool = False) -> None:
+        assert pred_skeletons.shape == gt_skeletons.shape, \
+            'The predicate and ground truth skeleton arrays must have the same shape.'
+        pred_colors = self.__init_colors(pred_skeletons.shape[0], pred_colors)
+        gt_colors = self.__init_colors(gt_skeletons.shape[0], gt_colors)
+        skeletons: np.ndarray = np.concatenate((pred_skeletons, gt_skeletons), axis=0)
+        colors: List[Color] = pred_colors + gt_colors
+        self.visualize(skeletons, colors, include_names, include_coordinates, automatic_camera_orientation)
+
     def visualize_video_from_file(self, file_name: str, colors: List[Color] = None, fps: int = 15,
                                   include_names: bool = False, include_coordinates: bool = False,
                                   automatic_camera_orientation: bool = False) -> None:
@@ -130,8 +142,8 @@ class SkeletonVisualizer:
         skeleton_part_size: float = self.__calculate_skeleton_part_size(skeletons)
         if positions is None:
             positions = skeletons
-        skeletons: List[Skeleton] = self.__get_skeletons(positions, colors, skeleton_part_size)
-        drawable_skeletons: List[DrawableSkeleton] = [skeleton_converter(skeleton) for skeleton in skeletons]
+        skeleton_objects: List[Skeleton] = self.__get_skeletons(positions, colors, skeleton_part_size)
+        drawable_skeletons: List[DrawableSkeleton] = [skeleton_converter(skeleton) for skeleton in skeleton_objects]
         self.__add_skeletons_to_plot(drawable_skeletons)
 
     def __init_skeleton_plot(self, skeletons: np.ndarray, automatic_camera_orientation: bool = False) -> None:
@@ -156,13 +168,16 @@ class SkeletonVisualizer:
         return (min(max_values) / 100.0) * self.size_scalar
 
     def __get_skeletons(self, positions: List[Positions], colors: List[Color],
-                        skeleton_part_size: float) -> List[Skeleton]:
-        return list(map(lambda position_color_tuple: Skeleton(
-            joint_positions=position_color_tuple[0],
+                        skeleton_part_size: float, is_gt_list: List[bool] = None) -> List[Skeleton]:
+        if is_gt_list is None:
+            is_gt_list = [False] * len(colors)
+        return list(map(lambda parameter_tuple: Skeleton(
+            joint_positions=parameter_tuple[0],
             joint_set=self.joint_set,
             part_size=skeleton_part_size,
-            color=position_color_tuple[1]
-        ), zip(positions, colors)))
+            color=parameter_tuple[1],
+            is_ground_truth=parameter_tuple[2]
+        ), zip(positions, colors, is_gt_list)))
 
     def __add_skeletons_to_plot(self, skeletons: List[DrawableSkeleton]) -> None:
         for drawable_skeleton in skeletons:
