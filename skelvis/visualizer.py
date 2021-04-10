@@ -69,8 +69,8 @@ class SkeletonVisualizer:
         self.joint_names_visible: Checkbox = Checkbox(description="Show Joint Names")
         self.joint_coordinates_visible: Checkbox = Checkbox(description="Show Coordinates")
 
-    def visualize(self, skeletons: np.ndarray, colors: List[Color] = None,
-                  include_names: bool = False, include_coordinates: bool = False) -> None:
+    def visualize(self, skeletons: np.ndarray, colors: List[Color] = None, include_names: bool = False,
+                  include_coordinates: bool = False, automatic_camera_orientation: bool = False) -> None:
         self.__assert_include_arguments(include_names, include_coordinates)
         self.__assert_skeleton_shapes(skeletons)
         colors = self.__init_colors(skeletons.shape[0], colors)
@@ -80,20 +80,22 @@ class SkeletonVisualizer:
             skeleton_converter = Skeleton.to_drawable_skeleton_with_coordinates
         else:
             skeleton_converter = Skeleton.to_drawable_skeleton
-        self.__create_skeleton_plot(skeletons, skeleton_converter, colors)
+        self.__create_skeleton_plot(skeletons, skeleton_converter, colors, automatic_camera_orientation)
         self.plot.display()
         self.__display_checkboxes(include_names, include_coordinates)
         self.__display_color_changer()
 
     def visualize_video_from_file(self, file_name: str, colors: List[Color] = None, fps: int = 15,
-                                  include_names: bool = False, include_coordinates: bool = False) -> None:
+                                  include_names: bool = False, include_coordinates: bool = False,
+                                  automatic_camera_orientation: bool = False) -> None:
         file: IO = open(file_name, 'rb')
         frames = pickle.load(file)
         file.close()
-        self.visualize_video(frames, colors, fps, include_names, include_coordinates)
+        self.visualize_video(frames, colors, fps, include_names, include_coordinates, automatic_camera_orientation)
 
     def visualize_video(self, frames: np.ndarray, colors: List[Color] = None, fps: int = 15,
-                        include_names: bool = False, include_coordinates: bool = False) -> None:
+                        include_names: bool = False, include_coordinates: bool = False,
+                        automatic_camera_orientation: bool = False) -> None:
         self.__assert_include_arguments(include_names, include_coordinates)
         assert len(frames.shape) == 4
         first_frame: np.ndarray = frames[0]
@@ -106,7 +108,8 @@ class SkeletonVisualizer:
             skeleton_converter = Skeleton.to_drawable_skeleton_for_video_with_coordinates
         else:
             skeleton_converter = Skeleton.to_drawable_skeleton_for_video
-        self.__create_skeleton_plot(first_frame, skeleton_converter, colors, skeleton_timestamps)
+        self.__create_skeleton_plot(first_frame, skeleton_converter, colors,
+                                    skeleton_timestamps, automatic_camera_orientation)
         self.plot.display()
         self.__display_video_player(fps, frames)
         self.__display_checkboxes(include_names, include_coordinates)
@@ -121,8 +124,9 @@ class SkeletonVisualizer:
         } for current_frame_index in range(len(frames_swapped))]
 
     def __create_skeleton_plot(self, skeletons: np.ndarray, skeleton_converter: Callable[[Skeleton], DrawableSkeleton],
-                               colors: List[Color], positions: Optional[Positions] = None) -> None:
-        self.__init_skeleton_plot(skeletons)
+                               colors: List[Color], positions: Optional[Positions] = None,
+                               automatic_camera_orientation: bool = False) -> None:
+        self.__init_skeleton_plot(skeletons, automatic_camera_orientation)
         skeleton_part_size: float = self.__calculate_skeleton_part_size(skeletons)
         if positions is None:
             positions = skeletons
@@ -130,19 +134,22 @@ class SkeletonVisualizer:
         drawable_skeletons: List[DrawableSkeleton] = [skeleton_converter(skeleton) for skeleton in skeletons]
         self.__add_skeletons_to_plot(drawable_skeletons)
 
-    def __init_skeleton_plot(self, skeletons: np.ndarray) -> None:
+    def __init_skeleton_plot(self, skeletons: np.ndarray, automatic_camera_orientation: bool = False) -> None:
         self.plot = k3d.plot(antialias=1, camera_auto_fit=False)
         centroid: np.ndarray = np.average(np.average(skeletons, axis=0), axis=0)
-        camera_up_vector: np.ndarray = np.zeros(shape=(3,))
-        for line_indices in self.joint_set.vertically_aligned_line_indices:
-            camera_up_vector += np.sum(
-                skeletons[:, line_indices[1]] - skeletons[:, line_indices[0]],
-                axis=0)
-        camera_up_vector /= np.linalg.norm(camera_up_vector, ord=2)
-        self.plot.camera = [
-            0, 0, 0,
-            centroid[0], centroid[1], centroid[2],
-            camera_up_vector[0], camera_up_vector[1], camera_up_vector[2]]
+        if automatic_camera_orientation:
+            camera_up_vector: np.ndarray = np.zeros(shape=(3,))
+            for line_indices in self.joint_set.vertically_aligned_line_indices:
+                camera_up_vector += np.sum(
+                    skeletons[:, line_indices[1]] - skeletons[:, line_indices[0]],
+                    axis=0)
+            camera_up_vector /= np.linalg.norm(camera_up_vector, ord=2)
+            self.plot.camera = [
+                0.0, 0.0, 0.0,
+                centroid[0], centroid[1], centroid[2],
+                camera_up_vector[0], camera_up_vector[1], camera_up_vector[2]]
+        else:
+            self.plot.camera = [0.0, 0.0, 0.0, 0.0, 0.0, centroid[2], 0.0, -1.0, 0.0]
 
     def __calculate_skeleton_part_size(self, skeletons: np.ndarray) -> float:
         max_values = [abs(skeleton).max() for skeleton in skeletons]
