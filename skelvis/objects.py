@@ -60,7 +60,7 @@ class Skeleton:
         self.joint_set: JointSet = joint_set
         self.part_size: float = part_size
         self.color: Color = color
-        self.is_ground_truth = is_ground_truth
+        self.is_ground_truth: bool = is_ground_truth
 
     def to_drawable_skeleton(self) -> DrawableSkeleton:
         joint_points: List[Points] = self.__get_joint_points()

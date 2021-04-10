@@ -70,7 +70,8 @@ class SkeletonVisualizer:
         self.joint_coordinates_visible: Checkbox = Checkbox(description="Show Coordinates")
 
     def visualize(self, skeletons: np.ndarray, colors: List[Color] = None, include_names: bool = False,
-                  include_coordinates: bool = False, automatic_camera_orientation: bool = False) -> None:
+                  include_coordinates: bool = False, automatic_camera_orientation: bool = False,
+                  is_gt_list: List[bool] = None) -> None:
         self.__assert_include_arguments(include_names, include_coordinates)
         self.__assert_skeleton_shapes(skeletons)
         colors = self.__init_colors(skeletons.shape[0], colors)
@@ -80,7 +81,8 @@ class SkeletonVisualizer:
             skeleton_converter = Skeleton.to_drawable_skeleton_with_coordinates
         else:
             skeleton_converter = Skeleton.to_drawable_skeleton
-        self.__create_skeleton_plot(skeletons, skeleton_converter, colors, automatic_camera_orientation)
+        self.__create_skeleton_plot(skeletons=skeletons, skeleton_converter=skeleton_converter, colors=colors,
+                                    automatic_camera_orientation=automatic_camera_orientation, is_gt_list=is_gt_list)
         self.plot.display()
         self.__display_checkboxes(include_names, include_coordinates)
         self.__display_color_changer()
@@ -95,7 +97,8 @@ class SkeletonVisualizer:
         gt_colors = self.__init_colors(gt_skeletons.shape[0], gt_colors)
         skeletons: np.ndarray = np.concatenate((pred_skeletons, gt_skeletons), axis=0)
         colors: List[Color] = pred_colors + gt_colors
-        self.visualize(skeletons, colors, include_names, include_coordinates, automatic_camera_orientation)
+        is_gt_list: List[bool] = [False] * len(pred_skeletons) + [True] * len(gt_skeletons)
+        self.visualize(skeletons, colors, include_names, include_coordinates, automatic_camera_orientation, is_gt_list)
 
     def visualize_video_from_file(self, file_name: str, colors: List[Color] = None, fps: int = 15,
                                   include_names: bool = False, include_coordinates: bool = False,
@@ -107,7 +110,7 @@ class SkeletonVisualizer:
 
     def visualize_video(self, frames: np.ndarray, colors: List[Color] = None, fps: int = 15,
                         include_names: bool = False, include_coordinates: bool = False,
-                        automatic_camera_orientation: bool = False) -> None:
+                        automatic_camera_orientation: bool = False, is_gt_list: List[bool] = None) -> None:
         self.__assert_include_arguments(include_names, include_coordinates)
         assert len(frames.shape) == 4
         first_frame: np.ndarray = frames[0]
@@ -120,12 +123,40 @@ class SkeletonVisualizer:
             skeleton_converter = Skeleton.to_drawable_skeleton_for_video_with_coordinates
         else:
             skeleton_converter = Skeleton.to_drawable_skeleton_for_video
-        self.__create_skeleton_plot(first_frame, skeleton_converter, colors,
-                                    skeleton_timestamps, automatic_camera_orientation)
+        self.__create_skeleton_plot(skeletons=first_frame, skeleton_converter=skeleton_converter, colors=colors,
+                                    positions=skeleton_timestamps,
+                                    automatic_camera_orientation=automatic_camera_orientation, is_gt_list=is_gt_list)
         self.plot.display()
         self.__display_video_player(fps, frames)
         self.__display_checkboxes(include_names, include_coordinates)
         self.__display_color_changer()
+
+    def visualize_video_with_ground_truths(self, pred_frames: np.ndarray, gt_frames: np.ndarray,
+                                           pred_colors: List[Color] = None, gt_colors: List[Color] = None,
+                                           fps: int = 15, include_names: bool = False,
+                                           include_coordinates: bool = False,
+                                           automatic_camera_orientation: bool = False):
+        pred_colors = self.__init_colors(pred_frames.shape[1], pred_colors)
+        gt_colors = self.__init_colors(gt_frames.shape[1], gt_colors)
+        frames: np.ndarray = np.concatenate((pred_frames, gt_frames), axis=1)
+        colors: List[Color] = pred_colors + gt_colors
+        is_gt_list: List[bool] = [False] * len(pred_colors) + [True] * len(gt_colors)
+        self.visualize_video(frames, colors, fps, include_names, include_coordinates,
+                             automatic_camera_orientation, is_gt_list)
+
+    def visualize_video_from_file_with_ground_truths(self, pred_file_name: str, gt_file_name: str,
+                                                     pred_colors: List[Color] = None, gt_colors: List[Color] = None,
+                                                     fps: int = 15, include_names: bool = False,
+                                                     include_coordinates: bool = False,
+                                                     automatic_camera_orientation: bool = False):
+        file: IO = open(pred_file_name, 'rb')
+        pred_frames = pickle.load(file)
+        file.close()
+        file = open(gt_file_name, 'rb')
+        gt_frames = pickle.load(file)
+        file.close()
+        self.visualize_video_with_ground_truths(pred_frames, gt_frames, pred_colors, gt_colors, fps, include_names,
+                                                include_coordinates, automatic_camera_orientation)
 
     @staticmethod
     def __get_skeleton_positions_timestamps(frames: np.ndarray) -> List[Dict[str, np.ndarray]]:
@@ -137,13 +168,13 @@ class SkeletonVisualizer:
 
     def __create_skeleton_plot(self, skeletons: np.ndarray, skeleton_converter: Callable[[Skeleton], DrawableSkeleton],
                                colors: List[Color], positions: Optional[Positions] = None,
-                               automatic_camera_orientation: bool = False) -> None:
+                               automatic_camera_orientation: bool = False, is_gt_list: List[bool] = None) -> None:
         self.__init_skeleton_plot(skeletons, automatic_camera_orientation)
         skeleton_part_size: float = self.__calculate_skeleton_part_size(skeletons)
         if positions is None:
             positions = skeletons
-        skeleton_objects: List[Skeleton] = self.__get_skeletons(positions, colors, skeleton_part_size)
-        drawable_skeletons: List[DrawableSkeleton] = [skeleton_converter(skeleton) for skeleton in skeleton_objects]
+        skeletons: List[Skeleton] = self.__get_skeletons(positions, colors, skeleton_part_size, is_gt_list)
+        drawable_skeletons: List[DrawableSkeleton] = list(map(skeleton_converter, skeletons))
         self.__add_skeletons_to_plot(drawable_skeletons)
 
     def __init_skeleton_plot(self, skeletons: np.ndarray, automatic_camera_orientation: bool = False) -> None:
