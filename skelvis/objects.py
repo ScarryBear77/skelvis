@@ -54,12 +54,13 @@ class DrawableSkeleton(Group):
 
 
 class Skeleton:
-    def __init__(self, joint_positions: Positions,
-                 joint_set: JointSet, part_size: float, color: Color):
+    def __init__(self, joint_positions: Positions, joint_set: JointSet,
+                 part_size: float, color: Color, is_ground_truth: bool):
         self.joint_positions: Positions = joint_positions
         self.joint_set: JointSet = joint_set
         self.part_size: float = part_size
         self.color: Color = color
+        self.is_ground_truth: bool = is_ground_truth
 
     def to_drawable_skeleton(self) -> DrawableSkeleton:
         joint_points: List[Points] = self.__get_joint_points()
@@ -180,9 +181,14 @@ class Skeleton:
         joint_colors_shape: Tuple[int] = (self.joint_set.number_of_joints,)
         if self.color == 'default':
             joint_colors = np.zeros(shape=joint_colors_shape, dtype='uint32')
-            joint_colors[self.joint_set.left_joint_indices] = DEFAULT_COLORS.get('red')
-            joint_colors[self.joint_set.right_joint_indices] = DEFAULT_COLORS.get('blue')
-            joint_colors[self.joint_set.center_joint_indices] = DEFAULT_COLORS.get('white')
+            if self.is_ground_truth:
+                joint_colors[self.joint_set.left_joint_indices] = DEFAULT_COLORS.get('yellow')
+                joint_colors[self.joint_set.right_joint_indices] = DEFAULT_COLORS.get('green')
+                joint_colors[self.joint_set.center_joint_indices] = DEFAULT_COLORS.get('teal')
+            else:
+                joint_colors[self.joint_set.left_joint_indices] = DEFAULT_COLORS.get('red')
+                joint_colors[self.joint_set.right_joint_indices] = DEFAULT_COLORS.get('blue')
+                joint_colors[self.joint_set.center_joint_indices] = DEFAULT_COLORS.get('white')
             return joint_colors
         else:
             return np.full(
@@ -194,9 +200,14 @@ class Skeleton:
         line_colors_shape: Tuple[int] = (self.joint_set.number_of_joints - 1,)
         if self.color == 'default':
             line_colors = np.zeros(shape=line_colors_shape, dtype='uint32')
-            line_colors[self.joint_set.left_line_indices] = DEFAULT_COLORS.get('red')
-            line_colors[self.joint_set.right_line_indices] = DEFAULT_COLORS.get('blue')
-            line_colors[self.joint_set.center_line_indices] = DEFAULT_COLORS.get('white')
+            if self.is_ground_truth:
+                line_colors[self.joint_set.left_line_indices] = DEFAULT_COLORS.get('yellow')
+                line_colors[self.joint_set.right_line_indices] = DEFAULT_COLORS.get('green')
+                line_colors[self.joint_set.center_line_indices] = DEFAULT_COLORS.get('teal')
+            else:
+                line_colors[self.joint_set.left_line_indices] = DEFAULT_COLORS.get('red')
+                line_colors[self.joint_set.right_line_indices] = DEFAULT_COLORS.get('blue')
+                line_colors[self.joint_set.center_line_indices] = DEFAULT_COLORS.get('white')
             return line_colors
         else:
             return np.full(
