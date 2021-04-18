@@ -1,31 +1,47 @@
 import pickle
-from typing import Optional, List, Dict, Callable, IO
+from typing import Optional, List, Dict, Callable, IO, Tuple
 
 import ipywidgets as widgets
 import k3d
 import numpy as np
 from IPython.display import display
-from ipywidgets import Play, Checkbox, IntSlider, Button, ColorPicker, VBox, Tab
+from ipywidgets import Play, Checkbox, IntSlider, Button, ColorPicker, VBox, Tab, HBox, Accordion
 from k3d.plot import Plot
 
 from .jointset import JointSet, MuPoTSJoints, OpenPoseJoints, CocoExJoints, PanopticJoints, Common14Joints
 from .objects import Skeleton, DrawableSkeleton, Color, Positions
 
 
-class FrameUpdater:
-    def __init__(self, video_player: Play):
-        self.video_player: Play = video_player
+class VideoPlayer:
+    def __init__(self, plot: Plot):
+        self.plot: Plot = plot
+        self.video_player: Optional[Play] = None
 
-    def update_to_next_frame(self, button) -> None:
+    def get_video_player_widget(self, fps: int, frames: np.ndarray) -> HBox:
+        self.video_player = Play(
+            value=0,
+            min=0, max=frames.shape[0] - 1,
+            step=1, interval=1000 / fps,
+            description='Press play', disabled=False)
+        frame_slider = IntSlider(value=0, min=0, max=frames.shape[0] - 1, step=1, description='Frame')
+        next_frame_button = Button(description='Next frame')
+        next_frame_button.on_click(self.__update_to_next_frame)
+        previous_frame_button = Button(description='Previous frame')
+        previous_frame_button.on_click(self.__update_to_previous_frame)
+        widgets.jslink((self.video_player, 'value'), (frame_slider, 'value'))
+        widgets.jslink((self.video_player, 'value'), (self.plot, 'time'))
+        return HBox([self.video_player, previous_frame_button, frame_slider, next_frame_button])
+
+    def __update_to_next_frame(self, button) -> None:
         if self.video_player.max > self.video_player.value:
             self.video_player.value += 1
 
-    def update_to_previous_frame(self, button) -> None:
+    def __update_to_previous_frame(self, button) -> None:
         if self.video_player.min < self.video_player.value:
             self.video_player.value -= 1
 
 
-class ColorChanger:
+class SkeletonColorUpdater:
     def __init__(self, skeleton: DrawableSkeleton, left_color_picker: ColorPicker,
                  right_color_picker: ColorPicker, center_color_picker: ColorPicker):
         self.skeleton: DrawableSkeleton = skeleton
@@ -58,6 +74,114 @@ class ColorChanger:
         return int(color.replace('#', '0x'), 16)
 
 
+class ColorPickerSynchronizer:
+    def __init__(self, left_skeleton_color_pickers: List[ColorPicker], right_skeleton_color_pickers: List[ColorPicker],
+                 center_skeleton_color_pickers: List[ColorPicker], all_skeleton_color_pickers: List[ColorPicker],
+                 left_synchronizer_color_picker: ColorPicker, right_synchronizer_color_picker: ColorPicker,
+                 center_synchronizer_color_picker: ColorPicker):
+        self.left_skeleton_color_pickers: List[ColorPicker] = left_skeleton_color_pickers
+        self.right_skeleton_color_pickers: List[ColorPicker] = right_skeleton_color_pickers
+        self.center_skeleton_color_pickers: List[ColorPicker] = center_skeleton_color_pickers
+        self.all_skeleton_color_pickers: List[ColorPicker] = all_skeleton_color_pickers
+        self.left_synchronizer_color_picker: ColorPicker = left_synchronizer_color_picker
+        self.right_synchronizer_color_picker: ColorPicker = right_synchronizer_color_picker
+        self.center_synchronizer_color_picker: ColorPicker = center_synchronizer_color_picker
+
+    def sync_left_color_pickers(self, current_color):
+        for color_picker in self.left_skeleton_color_pickers:
+            color_picker.value = current_color.new
+
+    def sync_right_color_pickers(self, current_color):
+        for color_picker in self.right_skeleton_color_pickers:
+            color_picker.value = current_color.new
+
+    def sync_center_color_pickers(self, current_color):
+        for color_picker in self.center_skeleton_color_pickers:
+            color_picker.value = current_color.new
+
+    def sync_all_color_pickers(self, current_color):
+        for color_picker in self.all_skeleton_color_pickers:
+            color_picker.value = current_color.new
+        self.left_synchronizer_color_picker.value = current_color.new
+        self.right_synchronizer_color_picker.value = current_color.new
+        self.center_synchronizer_color_picker.value = current_color.new
+
+
+class ColorChanger:
+    def __init__(self):
+        super(ColorChanger, self).__init__()
+
+    def get_color_changer_widget(self, skeletons: List[DrawableSkeleton]) -> Tab:
+        skeleton_color_changer_tabs: List[VBox] = []
+        pred_color_pickers: List[Tuple[ColorPicker, ColorPicker, ColorPicker, ColorPicker]] = []
+        gt_color_pickers: List[Tuple[ColorPicker, ColorPicker, ColorPicker, ColorPicker]] = []
+        for skeleton in skeletons:
+            skeleton_color_changer_tab, color_pickers = self.__create_color_changer_tab(skeleton)
+            skeleton_color_changer_tabs.append(skeleton_color_changer_tab)
+            if skeleton.is_ground_truth:
+                gt_color_pickers.append(color_pickers)
+            else:
+                pred_color_pickers.append(color_pickers)
+        if len(pred_color_pickers) != 0 and len(gt_color_pickers) != 0:
+            pred_skeleton_color_changer_tab = self.__create_color_synchronizer_tab(pred_color_pickers)
+            gt_skeleton_color_changer_tab = self.__create_color_synchronizer_tab(gt_color_pickers)
+            skeleton_color_changer_tabs.append(pred_skeleton_color_changer_tab)
+            skeleton_color_changer_tabs.append(gt_skeleton_color_changer_tab)
+        color_changer_widget: Tab = Tab(children=skeleton_color_changer_tabs)
+        for i in range(len(skeletons)):
+            color_changer_widget.set_title(i, 'Skeleton {:d} colors'.format(i + 1))
+        if len(skeleton_color_changer_tabs) > len(skeletons):
+            color_changer_widget.set_title(len(skeletons), 'Pred skeleton colors')
+            color_changer_widget.set_title(len(skeletons) + 1, 'GT skeleton colors')
+        return color_changer_widget
+
+    def __create_color_changer_tab(self, skeleton: DrawableSkeleton) ->\
+            Tuple[VBox, Tuple[ColorPicker, ColorPicker, ColorPicker, ColorPicker]]:
+        left_color_picker: ColorPicker = ColorPicker(
+            description='Left color:',
+            value=self.__get_as_html_color(skeleton.get_left_objects()[0].color))
+        right_color_picker: ColorPicker = ColorPicker(
+            description='Right color:',
+            value=self.__get_as_html_color(skeleton.get_right_objects()[0].color))
+        center_color_picker: ColorPicker = ColorPicker(
+            description='Center color:',
+            value=self.__get_as_html_color(skeleton.get_center_objects()[0].color))
+        all_color_picker: ColorPicker = ColorPicker(description='All color:', value='#ffffff')
+        skeleton_color_updater: SkeletonColorUpdater = SkeletonColorUpdater(
+            skeleton, left_color_picker, right_color_picker, center_color_picker)
+        left_color_picker.observe(skeleton_color_updater.update_left_objects, names='value')
+        right_color_picker.observe(skeleton_color_updater.update_right_objects, names='value')
+        center_color_picker.observe(skeleton_color_updater.update_center_objects, names='value')
+        all_color_picker.observe(skeleton_color_updater.update_all_objects, names='value')
+        return VBox([left_color_picker, right_color_picker, center_color_picker, all_color_picker]),\
+            (left_color_picker, right_color_picker, center_color_picker, all_color_picker)
+
+    @staticmethod
+    def __create_color_synchronizer_tab(
+            color_pickers: List[Tuple[ColorPicker, ColorPicker, ColorPicker, ColorPicker]]) -> VBox:
+        left_color_picker: ColorPicker = ColorPicker(description='Left color:', value='#ffffff')
+        right_color_picker: ColorPicker = ColorPicker(description='Right color:', value='#ffffff')
+        center_color_picker: ColorPicker = ColorPicker(description='Center color:', value='#ffffff')
+        all_color_picker: ColorPicker = ColorPicker(description='All color:', value='#ffffff')
+        color_picker_synchronizer: ColorPickerSynchronizer = ColorPickerSynchronizer(
+            left_skeleton_color_pickers=[color_picker[0] for color_picker in color_pickers],
+            right_skeleton_color_pickers=[color_picker[1] for color_picker in color_pickers],
+            center_skeleton_color_pickers=[color_picker[2] for color_picker in color_pickers],
+            all_skeleton_color_pickers=[color_picker[3] for color_picker in color_pickers],
+            left_synchronizer_color_picker=left_color_picker,
+            right_synchronizer_color_picker=right_color_picker,
+            center_synchronizer_color_picker=center_color_picker)
+        left_color_picker.observe(color_picker_synchronizer.sync_left_color_pickers, names='value')
+        right_color_picker.observe(color_picker_synchronizer.sync_right_color_pickers, names='value')
+        center_color_picker.observe(color_picker_synchronizer.sync_center_color_pickers, names='value')
+        all_color_picker.observe(color_picker_synchronizer.sync_all_color_pickers, names='value')
+        return VBox([left_color_picker, right_color_picker, center_color_picker, all_color_picker])
+
+    @staticmethod
+    def __get_as_html_color(color: int) -> str:
+        return '{0:#0{1}x}'.format(color, 8).replace('0x', '#')
+
+
 class SkeletonVisualizer:
     """ A 3D skeleton visualizer which can visualize skeletons in 3D plots."""
 
@@ -69,9 +193,10 @@ class SkeletonVisualizer:
         self.joint_names_visible: Checkbox = Checkbox(description="Show Joint Names")
         self.joint_coordinates_visible: Checkbox = Checkbox(description="Show Coordinates")
 
-    def visualize(self, skeletons: np.ndarray, colors: List[Color] = None, include_names: bool = False,
-                  include_coordinates: bool = False, automatic_camera_orientation: bool = False,
-                  is_gt_list: List[bool] = None) -> None:
+    def visualize(
+            self, skeletons: np.ndarray, colors: List[Color] = None, include_names: bool = False,
+            include_coordinates: bool = False, automatic_camera_orientation: bool = False,
+            is_gt_list: List[bool] = None) -> None:
         self.__assert_include_arguments(include_names, include_coordinates)
         self.__assert_skeleton_shapes(skeletons)
         colors = self.__init_colors(skeletons.shape[0], colors)
@@ -84,13 +209,21 @@ class SkeletonVisualizer:
         self.__create_skeleton_plot(skeletons=skeletons, skeleton_converter=skeleton_converter, colors=colors,
                                     automatic_camera_orientation=automatic_camera_orientation, is_gt_list=is_gt_list)
         self.plot.display()
-        self.__display_checkboxes(include_names, include_coordinates)
-        self.__display_color_changer()
+        self.__link_text_widgets(include_names, include_coordinates)
+        visibility_widget: HBox = HBox([self.joint_names_visible, self.joint_coordinates_visible])
+        color_changer: ColorChanger = ColorChanger()
+        color_changer_tab: Tab = color_changer.get_color_changer_widget(self.skeletons)
+        interface: Accordion = Accordion(children=[visibility_widget, color_changer_tab])
+        interface.set_title(0, 'Change visibilities')
+        interface.set_title(1, 'Change colors')
+        display(interface)
 
-    def visualize_with_ground_truths(self, pred_skeletons: np.ndarray, gt_skeletons: np.ndarray,
-                                     pred_colors: List[Color] = None, gt_colors: List[Color] = None,
-                                     include_names: bool = False, include_coordinates: bool = False,
-                                     automatic_camera_orientation: bool = False) -> None:
+
+    def visualize_with_ground_truths(
+            self, pred_skeletons: np.ndarray, gt_skeletons: np.ndarray,
+            pred_colors: List[Color] = None, gt_colors: List[Color] = None,
+            include_names: bool = False, include_coordinates: bool = False,
+            automatic_camera_orientation: bool = False) -> None:
         assert pred_skeletons.shape == gt_skeletons.shape, \
             'The predicate and ground truth skeleton arrays must have the same shape.'
         pred_colors = self.__init_colors(pred_skeletons.shape[0], pred_colors)
@@ -98,19 +231,13 @@ class SkeletonVisualizer:
         skeletons: np.ndarray = np.concatenate((pred_skeletons, gt_skeletons), axis=0)
         colors: List[Color] = pred_colors + gt_colors
         is_gt_list: List[bool] = [False] * len(pred_skeletons) + [True] * len(gt_skeletons)
-        self.visualize(skeletons, colors, include_names, include_coordinates, automatic_camera_orientation, is_gt_list)
+        self.visualize(
+            skeletons, colors, include_names, include_coordinates, automatic_camera_orientation, is_gt_list)
 
-    def visualize_video_from_file(self, file_name: str, colors: List[Color] = None, fps: int = 15,
-                                  include_names: bool = False, include_coordinates: bool = False,
-                                  automatic_camera_orientation: bool = False) -> None:
-        file: IO = open(file_name, 'rb')
-        frames = pickle.load(file)
-        file.close()
-        self.visualize_video(frames, colors, fps, include_names, include_coordinates, automatic_camera_orientation)
-
-    def visualize_video(self, frames: np.ndarray, colors: List[Color] = None, fps: int = 15,
-                        include_names: bool = False, include_coordinates: bool = False,
-                        automatic_camera_orientation: bool = False, is_gt_list: List[bool] = None) -> None:
+    def visualize_video(
+            self, frames: np.ndarray, colors: List[Color] = None, fps: int = 15,
+            include_names: bool = False, include_coordinates: bool = False,
+            automatic_camera_orientation: bool = False, is_gt_list: List[bool] = None) -> None:
         self.__assert_include_arguments(include_names, include_coordinates)
         assert len(frames.shape) == 4
         first_frame: np.ndarray = frames[0]
@@ -126,37 +253,76 @@ class SkeletonVisualizer:
         self.__create_skeleton_plot(skeletons=first_frame, skeleton_converter=skeleton_converter, colors=colors,
                                     positions=skeleton_timestamps,
                                     automatic_camera_orientation=automatic_camera_orientation, is_gt_list=is_gt_list)
+        self.__link_text_widgets(include_names, include_coordinates)
         self.plot.display()
-        self.__display_video_player(fps, frames)
-        self.__display_checkboxes(include_names, include_coordinates)
-        self.__display_color_changer()
+        visibility_widget: HBox = HBox([self.joint_names_visible, self.joint_coordinates_visible])
+        video_player: VideoPlayer = VideoPlayer(self.plot)
+        video_player_widget: HBox = video_player.get_video_player_widget(fps, frames)
+        color_changer: ColorChanger = ColorChanger()
+        color_changer_tab: Tab = color_changer.get_color_changer_widget(self.skeletons)
+        interface: Accordion = Accordion(children=[visibility_widget, color_changer_tab, video_player_widget])
+        interface.set_title(0, 'Change visibilities')
+        interface.set_title(1, 'Change colors')
+        interface.set_title(2, 'Play video')
+        display(interface)
 
-    def visualize_video_with_ground_truths(self, pred_frames: np.ndarray, gt_frames: np.ndarray,
-                                           pred_colors: List[Color] = None, gt_colors: List[Color] = None,
-                                           fps: int = 15, include_names: bool = False,
-                                           include_coordinates: bool = False,
-                                           automatic_camera_orientation: bool = False):
+    def visualize_video_from_file(
+            self, file_name: str, colors: List[Color] = None, fps: int = 15,
+            include_names: bool = False, include_coordinates: bool = False,
+            automatic_camera_orientation: bool = False) -> None:
+        file: IO = open(file_name, 'rb')
+        frames = pickle.load(file)
+        file.close()
+        self.visualize_video(
+            frames, colors, fps, include_names, include_coordinates, automatic_camera_orientation)
+
+    def visualize_video_with_ground_truths(
+            self, pred_frames: np.ndarray, gt_frames: np.ndarray,
+            pred_colors: List[Color] = None, gt_colors: List[Color] = None,
+            fps: int = 15, include_names: bool = False, include_coordinates: bool = False,
+            automatic_camera_orientation: bool = False) -> None:
         pred_colors = self.__init_colors(pred_frames.shape[1], pred_colors)
         gt_colors = self.__init_colors(gt_frames.shape[1], gt_colors)
         frames: np.ndarray = np.concatenate((pred_frames, gt_frames), axis=1)
         colors: List[Color] = pred_colors + gt_colors
         is_gt_list: List[bool] = [False] * len(pred_colors) + [True] * len(gt_colors)
-        self.visualize_video(frames, colors, fps, include_names, include_coordinates,
-                             automatic_camera_orientation, is_gt_list)
+        self.visualize_video(
+            frames, colors, fps, include_names, include_coordinates, automatic_camera_orientation, is_gt_list)
 
-    def visualize_video_from_file_with_ground_truths(self, pred_file_name: str, gt_file_name: str,
-                                                     pred_colors: List[Color] = None, gt_colors: List[Color] = None,
-                                                     fps: int = 15, include_names: bool = False,
-                                                     include_coordinates: bool = False,
-                                                     automatic_camera_orientation: bool = False):
+    def visualize_video_from_file_with_ground_truths(
+            self, pred_file_name: str, gt_file_name: str,
+            pred_colors: List[Color] = None, gt_colors: List[Color] = None,
+            fps: int = 15, include_names: bool = False, include_coordinates: bool = False,
+            automatic_camera_orientation: bool = False) -> None:
         file: IO = open(pred_file_name, 'rb')
         pred_frames = pickle.load(file)
         file.close()
         file = open(gt_file_name, 'rb')
         gt_frames = pickle.load(file)
         file.close()
-        self.visualize_video_with_ground_truths(pred_frames, gt_frames, pred_colors, gt_colors, fps, include_names,
-                                                include_coordinates, automatic_camera_orientation)
+        self.visualize_video_with_ground_truths(
+            pred_frames, gt_frames, pred_colors, gt_colors, fps,
+            include_names, include_coordinates, automatic_camera_orientation)
+
+    @staticmethod
+    def __init_colors(number_of_skeletons: int, colors: List[Color]) -> List[Color]:
+        if colors is None:
+            colors = ['default'] * number_of_skeletons
+        else:
+            assert number_of_skeletons == len(colors), \
+                'The \'skeletons\' and \'colors\' parameters must be the same length.'
+        return colors
+
+    def __assert_skeleton_shapes(self, skeletons: np.ndarray) -> None:
+        assert len(skeletons.shape) == 3, 'The \'skeletons\' parameter should be a 3 dimensional numpy array.'
+        assert skeletons.shape[1] == self.joint_set.number_of_joints, \
+            'The number of joints of skeletons and the number of joints in the specified joint set must be the same.'
+        assert skeletons.shape[2] == 3, 'The skeleton joint coordinates must be 3 dimensional'
+
+    @staticmethod
+    def __assert_include_arguments(include_names: bool, include_coordinates: bool) -> None:
+        if include_names is True and include_coordinates is True:
+            raise AttributeError('Either names or coordinates can be showed, but not both.')
 
     @staticmethod
     def __get_skeleton_positions_timestamps(frames: np.ndarray) -> List[Dict[str, np.ndarray]]:
@@ -184,15 +350,15 @@ class SkeletonVisualizer:
             camera_up_vector: np.ndarray = np.zeros(shape=(3,))
             for line_indices in self.joint_set.vertically_aligned_line_indices:
                 camera_up_vector += np.sum(
-                    skeletons[:, line_indices[1]] - skeletons[:, line_indices[0]],
-                    axis=0)
+                    skeletons[:, line_indices[1]] - skeletons[:, line_indices[0]], axis=0)
             camera_up_vector /= np.linalg.norm(camera_up_vector, ord=2)
-            self.plot.camera = [
-                0.0, 0.0, 0.0,
-                centroid[0], centroid[1], centroid[2],
-                camera_up_vector[0], camera_up_vector[1], camera_up_vector[2]]
+            self.plot.camera = [0.0, 0.0, 0.0,  # Camera position
+                                centroid[0], centroid[1], centroid[2],  # Camera looking at
+                                camera_up_vector[0], camera_up_vector[1], camera_up_vector[2]]  # Camera up vector
         else:
-            self.plot.camera = [0.0, 0.0, 0.0, 0.0, 0.0, centroid[2], 0.0, -1.0, 0.0]
+            self.plot.camera = [0.0, 0.0, 0.0,  # Camera position
+                                0.0, 0.0, centroid[2],  # Camera looking at
+                                0.0, -1.0, 0.0]  # Camera up vector
 
     def __calculate_skeleton_part_size(self, skeletons: np.ndarray) -> float:
         max_values = [abs(skeleton).max() for skeleton in skeletons]
@@ -202,12 +368,11 @@ class SkeletonVisualizer:
                         skeleton_part_size: float, is_gt_list: List[bool] = None) -> List[Skeleton]:
         if is_gt_list is None:
             is_gt_list = [False] * len(colors)
+        position_index, color_index, ground_truth_index = 0, 1, 2
         return list(map(lambda parameter_tuple: Skeleton(
-            joint_positions=parameter_tuple[0],
-            joint_set=self.joint_set,
-            part_size=skeleton_part_size,
-            color=parameter_tuple[1],
-            is_ground_truth=parameter_tuple[2]
+            joint_positions=parameter_tuple[position_index], joint_set=self.joint_set,
+            part_size=skeleton_part_size, color=parameter_tuple[color_index],
+            is_ground_truth=parameter_tuple[ground_truth_index]
         ), zip(positions, colors, is_gt_list)))
 
     def __add_skeletons_to_plot(self, skeletons: List[DrawableSkeleton]) -> None:
@@ -215,49 +380,11 @@ class SkeletonVisualizer:
             self.plot += drawable_skeleton
             self.skeletons.append(drawable_skeleton)
 
-    def __display_video_player(self, fps, frames) -> None:
-        video_player: Play = Play(
-            value=0,
-            min=0, max=frames.shape[0] - 1,
-            step=1, interval=1000 / fps,
-            description='Press play', disabled=False)
-        frame_updater = FrameUpdater(video_player)
-        frame_slider = IntSlider(value=0, min=0, max=frames.shape[0] - 1, step=1, description='Frame')
-        next_frame_button = Button(description='Next frame')
-        next_frame_button.on_click(frame_updater.update_to_next_frame)
-        previous_frame_button = Button(description='Previous frame')
-        previous_frame_button.on_click(frame_updater.update_to_previous_frame)
-        widgets.jslink((video_player, 'value'), (frame_slider, 'value'))
-        widgets.jslink((video_player, 'value'), (self.plot, 'time'))
-        display(widgets.HBox([video_player, previous_frame_button, frame_slider, next_frame_button]))
-
-    @staticmethod
-    def __init_colors(number_of_skeletons: int, colors: List[Color]) -> List[Color]:
-        if colors is None:
-            colors = ['default' for _ in range(number_of_skeletons)]
-        else:
-            assert number_of_skeletons == len(colors), \
-                'The \'skeletons\' and \'colors\' parameters must be the same length.'
-        return colors
-
-    def __assert_skeleton_shapes(self, skeletons: np.ndarray) -> None:
-        assert len(skeletons.shape) == 3, 'The \'skeletons\' parameter should be a 3 dimensional numpy array.'
-        assert skeletons.shape[1] == self.joint_set.number_of_joints, \
-            'The number of joints of skeletons and the number of joints in the specified joint set must be the same.'
-        assert skeletons.shape[2] == 3, 'The skeleton joint coordinates must be 3 dimensional'
-
-    @staticmethod
-    def __assert_include_arguments(include_names: bool, include_coordinates: bool) -> None:
-        if include_names is True and include_coordinates is True:
-            raise AttributeError('Either names or coordinates can be showed, but not both.')
-
-    def __display_checkboxes(self, include_names: bool, include_coordinates: bool) -> None:
+    def __link_text_widgets(self, include_names: bool, include_coordinates: bool) -> None:
         if include_names:
             self.__link_joint_name_visibility_with_checkbox()
-            display(self.joint_names_visible)
         if include_coordinates:
             self.__link_joint_coordinate_visibility_with_checkbox()
-            display(self.joint_coordinates_visible)
 
     def __link_joint_name_visibility_with_checkbox(self) -> None:
         for skeleton in self.skeletons:
@@ -268,35 +395,6 @@ class SkeletonVisualizer:
         for skeleton in self.skeletons:
             for joint_coordinate in skeleton.joint_coordinates:
                 widgets.jslink((joint_coordinate, 'visible'), (self.joint_coordinates_visible, 'value'))
-
-    def __display_color_changer(self):
-        children: List[VBox] = []
-        for skeleton in self.skeletons:
-            left_color_picker: ColorPicker = ColorPicker(
-                description='Left color:',
-                value=self.__get_as_html_color(skeleton.get_left_objects()[0].color))
-            right_color_picker: ColorPicker = ColorPicker(
-                description='Right color:',
-                value=self.__get_as_html_color(skeleton.get_right_objects()[0].color))
-            center_color_picker: ColorPicker = ColorPicker(
-                description='Center color:',
-                value=self.__get_as_html_color(skeleton.get_center_objects()[0].color))
-            all_color_picker: ColorPicker = ColorPicker(description='All color:', value='#ffffff')
-            color_changer: ColorChanger = ColorChanger(
-                skeleton, left_color_picker, right_color_picker, center_color_picker)
-            left_color_picker.observe(color_changer.update_left_objects, names='value')
-            right_color_picker.observe(color_changer.update_right_objects, names='value')
-            center_color_picker.observe(color_changer.update_center_objects, names='value')
-            all_color_picker.observe(color_changer.update_all_objects, names='value')
-            children.append(VBox([left_color_picker, right_color_picker, center_color_picker, all_color_picker]))
-        color_changer_widget: Tab = Tab(children=children)
-        for i in range(len(self.skeletons)):
-            color_changer_widget.set_title(i, 'Skeleton {:d} colors'.format(i + 1))
-        display(color_changer_widget)
-
-    @staticmethod
-    def __get_as_html_color(color: int):
-        return '{0:#0{1}x}'.format(color, 8).replace('0x', '#')
 
 
 class MuPoTSVisualizer(SkeletonVisualizer):
