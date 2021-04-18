@@ -5,7 +5,7 @@ import ipywidgets as widgets
 import k3d
 import numpy as np
 from IPython.display import display
-from ipywidgets import Play, Checkbox, IntSlider, Button, ColorPicker, VBox, Tab
+from ipywidgets import Play, Checkbox, IntSlider, Button, ColorPicker, VBox, Tab, HBox, Accordion
 from k3d.plot import Plot
 
 from .jointset import JointSet, MuPoTSJoints, OpenPoseJoints, CocoExJoints, PanopticJoints, Common14Joints
@@ -17,7 +17,7 @@ class VideoPlayer:
         self.plot: Plot = plot
         self.video_player: Optional[Play] = None
 
-    def display_video_player(self, fps: int, frames: np.ndarray) -> None:
+    def get_video_player_widget(self, fps: int, frames: np.ndarray) -> HBox:
         self.video_player = Play(
             value=0,
             min=0, max=frames.shape[0] - 1,
@@ -30,7 +30,7 @@ class VideoPlayer:
         previous_frame_button.on_click(self.__update_to_previous_frame)
         widgets.jslink((self.video_player, 'value'), (frame_slider, 'value'))
         widgets.jslink((self.video_player, 'value'), (self.plot, 'time'))
-        display(widgets.HBox([self.video_player, previous_frame_button, frame_slider, next_frame_button]))
+        return HBox([self.video_player, previous_frame_button, frame_slider, next_frame_button])
 
     def __update_to_next_frame(self, button) -> None:
         if self.video_player.max > self.video_player.value:
@@ -111,7 +111,7 @@ class ColorChanger:
     def __init__(self):
         super(ColorChanger, self).__init__()
 
-    def display_color_changer(self, skeletons: List[DrawableSkeleton]):
+    def get_color_changer_widget(self, skeletons: List[DrawableSkeleton]) -> Tab:
         skeleton_color_changer_tabs: List[VBox] = []
         pred_color_pickers: List[Tuple[ColorPicker, ColorPicker, ColorPicker, ColorPicker]] = []
         gt_color_pickers: List[Tuple[ColorPicker, ColorPicker, ColorPicker, ColorPicker]] = []
@@ -133,7 +133,7 @@ class ColorChanger:
         if len(skeleton_color_changer_tabs) > len(skeletons):
             color_changer_widget.set_title(len(skeletons), 'Pred skeleton colors')
             color_changer_widget.set_title(len(skeletons) + 1, 'GT skeleton colors')
-        display(color_changer_widget)
+        return color_changer_widget
 
     def __create_color_changer_tab(self, skeleton: DrawableSkeleton) ->\
             Tuple[VBox, Tuple[ColorPicker, ColorPicker, ColorPicker, ColorPicker]]:
@@ -209,9 +209,15 @@ class SkeletonVisualizer:
         self.__create_skeleton_plot(skeletons=skeletons, skeleton_converter=skeleton_converter, colors=colors,
                                     automatic_camera_orientation=automatic_camera_orientation, is_gt_list=is_gt_list)
         self.plot.display()
-        self.__display_checkboxes(include_names, include_coordinates)
+        self.__link_text_widgets(include_names, include_coordinates)
+        visibility_widget: HBox = HBox([self.joint_names_visible, self.joint_coordinates_visible])
         color_changer: ColorChanger = ColorChanger()
-        color_changer.display_color_changer(self.skeletons)
+        color_changer_tab: Tab = color_changer.get_color_changer_widget(self.skeletons)
+        interface: Accordion = Accordion(children=[visibility_widget, color_changer_tab])
+        interface.set_title(0, 'Change visibilities')
+        interface.set_title(1, 'Change colors')
+        display(interface)
+
 
     def visualize_with_ground_truths(
             self, pred_skeletons: np.ndarray, gt_skeletons: np.ndarray,
@@ -247,12 +253,18 @@ class SkeletonVisualizer:
         self.__create_skeleton_plot(skeletons=first_frame, skeleton_converter=skeleton_converter, colors=colors,
                                     positions=skeleton_timestamps,
                                     automatic_camera_orientation=automatic_camera_orientation, is_gt_list=is_gt_list)
+        self.__link_text_widgets(include_names, include_coordinates)
         self.plot.display()
+        visibility_widget: HBox = HBox([self.joint_names_visible, self.joint_coordinates_visible])
         video_player: VideoPlayer = VideoPlayer(self.plot)
-        video_player.display_video_player(fps, frames)
-        self.__display_checkboxes(include_names, include_coordinates)
+        video_player_widget: HBox = video_player.get_video_player_widget(fps, frames)
         color_changer: ColorChanger = ColorChanger()
-        color_changer.display_color_changer(self.skeletons)
+        color_changer_tab: Tab = color_changer.get_color_changer_widget(self.skeletons)
+        interface: Accordion = Accordion(children=[visibility_widget, color_changer_tab, video_player_widget])
+        interface.set_title(0, 'Change visibilities')
+        interface.set_title(1, 'Change colors')
+        interface.set_title(2, 'Play video')
+        display(interface)
 
     def visualize_video_from_file(
             self, file_name: str, colors: List[Color] = None, fps: int = 15,
@@ -368,13 +380,11 @@ class SkeletonVisualizer:
             self.plot += drawable_skeleton
             self.skeletons.append(drawable_skeleton)
 
-    def __display_checkboxes(self, include_names: bool, include_coordinates: bool) -> None:
+    def __link_text_widgets(self, include_names: bool, include_coordinates: bool) -> None:
         if include_names:
             self.__link_joint_name_visibility_with_checkbox()
-            display(self.joint_names_visible)
         if include_coordinates:
             self.__link_joint_coordinate_visibility_with_checkbox()
-            display(self.joint_coordinates_visible)
 
     def __link_joint_name_visibility_with_checkbox(self) -> None:
         for skeleton in self.skeletons:
