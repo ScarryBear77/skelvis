@@ -21,7 +21,7 @@ COORDINATE_FORMAT: Final[str] = '({:.2f}, {:.2f}, {:.2f})'
 
 class DrawableSkeleton(Group):
     def __init__(self, joint_set: JointSet, joint_points: List[Points], joint_lines: List[Line],
-                 joint_names: List[Text] = None, joint_coordinates: List[Text] = None):
+                 is_ground_truth: bool, joint_names: List[Text] = None, joint_coordinates: List[Text] = None):
         drawable_objects: List[Drawable] = joint_points + joint_lines
         if joint_names is not None:
             drawable_objects += joint_names
@@ -31,6 +31,7 @@ class DrawableSkeleton(Group):
         self.joint_set: JointSet = joint_set
         self.joint_points: List[Points] = joint_points
         self.joint_lines: List[Line] = joint_lines
+        self.is_ground_truth: bool = is_ground_truth
         self.joint_names: List[Text] = joint_names
         self.joint_coordinates: List[Text] = joint_coordinates
 
@@ -65,36 +66,40 @@ class Skeleton:
     def to_drawable_skeleton(self) -> DrawableSkeleton:
         joint_points: List[Points] = self.__get_joint_points()
         joint_lines: List[Line] = self.__get_joint_lines()
-        return DrawableSkeleton(self.joint_set, joint_points, joint_lines)
+        return DrawableSkeleton(self.joint_set, joint_points, joint_lines, self.is_ground_truth)
 
     def to_drawable_skeleton_with_names(self) -> DrawableSkeleton:
         joint_points: List[Points] = self.__get_joint_points()
         joint_lines: List[Line] = self.__get_joint_lines()
         joint_names: List[Text] = self.__get_joint_names()
-        return DrawableSkeleton(self.joint_set, joint_points, joint_lines, joint_names=joint_names)
+        return DrawableSkeleton(self.joint_set, joint_points, joint_lines,
+                                self.is_ground_truth, joint_names=joint_names)
 
     def to_drawable_skeleton_with_coordinates(self) -> DrawableSkeleton:
         joint_points: List[Points] = self.__get_joint_points()
         joint_lines: List[Line] = self.__get_joint_lines()
         joint_coordinates: List[Text] = self.__get_joint_coordinates()
-        return DrawableSkeleton(self.joint_set, joint_points, joint_lines, joint_coordinates=joint_coordinates)
+        return DrawableSkeleton(self.joint_set, joint_points, joint_lines,
+                                self.is_ground_truth, joint_coordinates=joint_coordinates)
 
     def to_drawable_skeleton_for_video(self) -> DrawableSkeleton:
         joint_points: List[Points] = self.__get_joint_points_for_video()
         joint_lines: List[Line] = self.__get_joint_lines_for_video()
-        return DrawableSkeleton(self.joint_set, joint_points, joint_lines)
+        return DrawableSkeleton(self.joint_set, joint_points, joint_lines, self.is_ground_truth)
 
     def to_drawable_skeleton_for_video_with_names(self) -> DrawableSkeleton:
         joint_points: List[Points] = self.__get_joint_points_for_video()
         joint_lines: List[Line] = self.__get_joint_lines_for_video()
         joint_names: List[Text] = self.__get_joint_names_for_video()
-        return DrawableSkeleton(self.joint_set, joint_points, joint_lines, joint_names=joint_names)
+        return DrawableSkeleton(self.joint_set, joint_points, joint_lines,
+                                self.is_ground_truth, joint_names=joint_names)
 
     def to_drawable_skeleton_for_video_with_coordinates(self) -> DrawableSkeleton:
         joint_points: List[Points] = self.__get_joint_points_for_video()
         joint_lines: List[Line] = self.__get_joint_lines_for_video()
         joint_coordinates: List[Text] = self.__get_joint_coordinates_for_video()
-        return DrawableSkeleton(self.joint_set, joint_points, joint_lines, joint_coordinates=joint_coordinates)
+        return DrawableSkeleton(self.joint_set, joint_points, joint_lines,
+                                self.is_ground_truth, joint_coordinates=joint_coordinates)
 
     def __get_joint_points(self) -> List[Points]:
         skeleton_joint_colors: np.ndarray = self.__get_joint_colors()
