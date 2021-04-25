@@ -5,7 +5,7 @@ import ipywidgets as widgets
 import k3d
 import numpy as np
 from IPython.display import display
-from ipywidgets import Play, Checkbox, IntSlider, Button, ColorPicker, VBox, Tab, HBox, Accordion
+from ipywidgets import Play, Checkbox, IntSlider, Button, ColorPicker, VBox, Tab, HBox, Accordion, Widget
 from k3d.plot import Plot
 
 from .jointset import JointSet, MuPoTSJoints, OpenPoseJoints, CocoExJoints, PanopticJoints, Common14Joints
@@ -213,11 +213,8 @@ class SkeletonVisualizer:
         visibility_widget: HBox = HBox([self.joint_names_visible, self.joint_coordinates_visible])
         color_changer: ColorChanger = ColorChanger()
         color_changer_tab: Tab = color_changer.get_color_changer_widget(self.skeletons)
-        interface: Accordion = Accordion(children=[visibility_widget, color_changer_tab])
-        interface.set_title(0, 'Change visibilities')
-        interface.set_title(1, 'Change colors')
-        display(interface)
-
+        self.__display_interface([('Change visibilities', visibility_widget),
+                                  ('Change colors', color_changer_tab)])
 
     def visualize_with_ground_truths(
             self, pred_skeletons: np.ndarray, gt_skeletons: np.ndarray,
@@ -260,11 +257,9 @@ class SkeletonVisualizer:
         video_player_widget: HBox = video_player.get_video_player_widget(fps, frames)
         color_changer: ColorChanger = ColorChanger()
         color_changer_tab: Tab = color_changer.get_color_changer_widget(self.skeletons)
-        interface: Accordion = Accordion(children=[visibility_widget, color_changer_tab, video_player_widget])
-        interface.set_title(0, 'Change visibilities')
-        interface.set_title(1, 'Change colors')
-        interface.set_title(2, 'Play video')
-        display(interface)
+        self.__display_interface([('Play video', video_player_widget),
+                                  ('Change visibilities', visibility_widget),
+                                  ('Change colors', color_changer_tab)])
 
     def visualize_video_from_file(
             self, file_name: str, colors: List[Color] = None, fps: int = 15,
@@ -395,6 +390,13 @@ class SkeletonVisualizer:
         for skeleton in self.skeletons:
             for joint_coordinate in skeleton.joint_coordinates:
                 widgets.jslink((joint_coordinate, 'visible'), (self.joint_coordinates_visible, 'value'))
+
+    @staticmethod
+    def __display_interface(widget_tuples: List[Tuple[str, Widget]]) -> None:
+        interface: Accordion = Accordion(children=list([widget_tuple[1] for widget_tuple in widget_tuples]))
+        for i in range(len(widget_tuples)):
+            interface.set_title(i, widget_tuples[i][0])
+        display(interface)
 
 
 class MuPoTSVisualizer(SkeletonVisualizer):
