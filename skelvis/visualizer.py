@@ -21,7 +21,7 @@ def create_video_player(fps: int, number_of_frames: int) -> Play:
 class VideoPlayer:
     def __init__(self, plot: Plot, fps: int, frames: np.ndarray, video_player: Play = None):
         self.plot: Plot = plot
-        self.video_player: Optional[Play] =\
+        self.video_player: Optional[Play] = \
             video_player if video_player is not None else create_video_player(fps, number_of_frames=frames.shape[0] - 1)
         self.fps: int = fps
         self.frames: np.ndarray = frames
@@ -140,7 +140,7 @@ class ColorChanger:
             color_changer_widget.set_title(len(skeletons) + 1, 'GT skeleton colors')
         return color_changer_widget
 
-    def __create_color_changer_tab(self, skeleton: DrawableSkeleton) ->\
+    def __create_color_changer_tab(self, skeleton: DrawableSkeleton) -> \
             Tuple[VBox, Tuple[ColorPicker, ColorPicker, ColorPicker, ColorPicker]]:
         left_color_picker: ColorPicker = ColorPicker(
             description='Left color:',
@@ -158,8 +158,8 @@ class ColorChanger:
         right_color_picker.observe(skeleton_color_updater.update_right_objects, names='value')
         center_color_picker.observe(skeleton_color_updater.update_center_objects, names='value')
         all_color_picker.observe(skeleton_color_updater.update_all_objects, names='value')
-        return VBox([left_color_picker, right_color_picker, center_color_picker, all_color_picker]),\
-            (left_color_picker, right_color_picker, center_color_picker, all_color_picker)
+        return (VBox([left_color_picker, right_color_picker, center_color_picker, all_color_picker]),
+                (left_color_picker, right_color_picker, center_color_picker, all_color_picker))
 
     @staticmethod
     def __create_color_synchronizer_tab(
@@ -194,6 +194,7 @@ class LossContainer:
             self.is_video: bool = True
             self.pred_skeletons: np.ndarray = np.swapaxes(pred_skeletons, 0, 1)
             self.gt_skeletons: np.ndarray = np.swapaxes(gt_skeletons, 0, 1)
+            # Fields related to playing videos
             self.video_player = video_player
             self.min_loss_frame_index: int = 0
             self.max_loss_frame_index: int = 0
@@ -203,21 +204,25 @@ class LossContainer:
             self.gt_skeletons: np.ndarray = np.swapaxes(gt_skeletons[np.newaxis], 0, 1)
         self.joint_set: JointSet = joint_set
         self.number_of_skeletons: int = self.pred_skeletons.shape[0]
+        # Joint loss related fields
         self.joint_losses: np.ndarray = loss(self.pred_skeletons, self.gt_skeletons)
         self.min_joint_loss_indices = np.argmin(self.joint_losses, axis=-1)
         self.max_joint_loss_indices = np.argmax(self.joint_losses, axis=-1)
-        self.skeleton_losses = np.sum(self.joint_losses, axis=-1)
-        self.all_losses = np.sum(self.skeleton_losses, axis=0)
-        self.min_skeleton_loss_indices = np.argmin(self.skeleton_losses, axis=0) + 1
-        self.max_skeleton_loss_indices = np.argmax(self.skeleton_losses, axis=0) + 1
-        self.skeleton_loss_labels: List[Label] = [Label(value='test') for _ in range(self.number_of_skeletons)]
-        self.all_loss_label: Label = Label(value='test')
-        self.min_loss_index_label: Label = Label(value='test')
-        self.max_loss_index_label: Label = Label(value='test')
+        # Joint loss related labels
         self.joint_loss_labels: List[List[Label]] = []
         self.all_joint_loss_labels: List[Label] = [Label(value='test') for _ in range(self.number_of_skeletons)]
         self.min_joint_loss_name_labels: List[Label] = [Label(value='test') for _ in range(self.number_of_skeletons)]
         self.max_joint_loss_name_labels: List[Label] = [Label(value='test') for _ in range(self.number_of_skeletons)]
+        # Skeleton loss related fields
+        self.skeleton_losses = np.sum(self.joint_losses, axis=-1)
+        self.all_losses = np.sum(self.skeleton_losses, axis=0)
+        self.min_skeleton_loss_indices = np.argmin(self.skeleton_losses, axis=0) + 1
+        self.max_skeleton_loss_indices = np.argmax(self.skeleton_losses, axis=0) + 1
+        # Skeleton loss related labels
+        self.skeleton_loss_labels: List[Label] = [Label(value='test') for _ in range(self.number_of_skeletons)]
+        self.all_loss_label: Label = Label(value='test')
+        self.min_loss_index_label: Label = Label(value='test')
+        self.max_loss_index_label: Label = Label(value='test')
 
     def get_loss_tab(self) -> Tab:
         loss_tab: Tab = self.__create_empty_loss_tabs()
@@ -226,9 +231,33 @@ class LossContainer:
             self.video_player.observe(self.__update_losses, names='value')
         return loss_tab
 
-    def __create_empty_loss_tabs(self):
+    def __create_empty_loss_tabs(self) -> Tab:
         skeleton_loss_tabs: List[HBox] = [self.__create_loss_tab_for_skeleton(i)
                                           for i in range(self.number_of_skeletons)]
+        all_losses_tab: HBox = self.__create_all_losses_tab()
+        loss_tabs: List[HBox] = [all_losses_tab] + skeleton_loss_tabs
+        loss_tab: Tab = Tab(children=loss_tabs)
+        loss_tab.set_title(0, "All losses")
+        for i in range(len(loss_tabs) - 1):
+            loss_tab.set_title(i + 1, 'Skeleton {:d} losses'.format(i + 1))
+        return loss_tab
+
+    def __create_loss_tab_for_skeleton(self, index: int) -> HBox:
+        joint_loss_labels: List[Label] = [Label(value='test') for _ in range(self.joint_set.number_of_joints)]
+        joint_names: VBox = VBox(children=[Label(value=name) for name in self.joint_set.names])
+        joint_losses: VBox = VBox(children=joint_loss_labels)
+        self.joint_loss_labels.append(joint_loss_labels)
+        statistics_labels: VBox = VBox(
+            children=[Label(value='All losses:'),
+                      Label(value='Joint with min loss:'),
+                      Label(value='Joint with max loss:')])
+        skeleton_values: VBox = VBox(
+            children=[self.all_joint_loss_labels[index],
+                      self.min_joint_loss_name_labels[index],
+                      self.max_joint_loss_name_labels[index]])
+        return HBox(children=[joint_names, joint_losses, statistics_labels, skeleton_values])
+
+    def __create_all_losses_tab(self) -> HBox:
         skeleton_labels: VBox = VBox(
             children=[Label(value='Skeleton {:d} loss:'.format(i + 1)) for i in range(self.number_of_skeletons)])
         skeleton_losses: VBox = VBox(children=self.skeleton_loss_labels)
@@ -242,29 +271,12 @@ class LossContainer:
                                                                       statistics_values_column)
         statistics_labels: VBox = VBox(children=statistics_labels_column)
         statistics_values: VBox = VBox(children=statistics_values_column)
-        loss_tabs: List[HBox] = [HBox(children=[
-            skeleton_labels, skeleton_losses, statistics_labels, statistics_values
-        ] + ([VBox(children=jump_buttons)] if len(jump_buttons) > 0 else []))] + skeleton_loss_tabs
-        loss_tab = Tab(children=loss_tabs)
-        loss_tab.set_title(0, "All losses")
-        for i in range(len(loss_tabs)):
-            loss_tab.set_title(i + 1, 'Skeleton {:d} losses'.format(i + 1))
-        return loss_tab
-
-    def __create_loss_tab_for_skeleton(self, index: int) -> HBox:
-        joint_loss_labels: List[Label] = [Label(value='test') for _ in range(self.joint_set.number_of_joints)]
-        joint_names: VBox = VBox(children=[Label(value=name) for name in self.joint_set.names])
-        joint_losses: VBox = VBox(children=joint_loss_labels)
-        self.joint_loss_labels.append(joint_loss_labels)
-        skeleton_statistics_labels: List[Label] = [Label(value='All losses:'),
-                                                   Label(value='Joint with min loss:'),
-                                                   Label(value='Joint with max loss:')]
-        skeleton_statistics_values: List[Label] = [self.all_joint_loss_labels[index],
-                                                   self.min_joint_loss_name_labels[index],
-                                                   self.max_joint_loss_name_labels[index]]
-        skeleton_labels: VBox = VBox(children=skeleton_statistics_labels)
-        skeleton_values: VBox = VBox(children=skeleton_statistics_values)
-        return HBox(children=[joint_names, joint_losses, skeleton_labels, skeleton_values])
+        all_losses_tab: HBox = HBox(
+            children=[skeleton_labels, skeleton_losses,
+                      statistics_labels, statistics_values
+                      ] + ([VBox(children=jump_buttons)] if len(jump_buttons) > 0 else [])
+        )
+        return all_losses_tab
 
     def __create_frame_jump_buttons(self, statistics_labels_column: List[Label],
                                     statistics_values_column: List[Label]) -> List[Button]:
@@ -330,8 +342,9 @@ class SkeletonVisualizer:
             skeleton_converter = Skeleton.to_drawable_skeleton_with_coordinates
         else:
             skeleton_converter = Skeleton.to_drawable_skeleton
-        self.__create_skeleton_plot(skeletons=skeletons, skeleton_converter=skeleton_converter, colors=colors,
-                                    automatic_camera_orientation=automatic_camera_orientation, is_gt_list=is_gt_list)
+        self.__create_skeleton_plot(
+            skeletons=skeletons, skeleton_converter=skeleton_converter, colors=colors,
+            automatic_camera_orientation=automatic_camera_orientation, is_gt_list=is_gt_list)
         self.plot.display()
         self.__link_text_widgets(include_names, include_coordinates)
         visibility_widget: HBox = HBox([self.joint_names_visible, self.joint_coordinates_visible])
@@ -341,11 +354,22 @@ class SkeletonVisualizer:
                                   ('Change colors', color_changer_tab)] +
                                  ([] if additional_tabs is None else additional_tabs))
 
+    def visualize_from_file(
+            self, file_name: str, colors: List[Color] = None, include_names: bool = False,
+            include_coordinates: bool = False, automatic_camera_orientation: bool = False,
+            is_gt_list: List[bool] = None, additional_tabs: List[Tuple[str, Widget]] = None) -> None:
+        file: IO = open(file_name, 'rb')
+        skeletons = pickle.load(file)
+        file.close()
+        self.visualize(skeletons, colors, include_names, include_coordinates,
+                       automatic_camera_orientation, is_gt_list,  additional_tabs)
+
     def visualize_with_ground_truths(
             self, pred_skeletons: np.ndarray, gt_skeletons: np.ndarray,
             pred_colors: List[Color] = None, gt_colors: List[Color] = None,
             include_names: bool = False, include_coordinates: bool = False,
-            automatic_camera_orientation: bool = False, loss: Callable[[np.ndarray, np.ndarray], np.ndarray] = L2) -> None:
+            automatic_camera_orientation: bool = False, include_losses: bool = True,
+            loss: Callable[[np.ndarray, np.ndarray], np.ndarray] = L2) -> None:
         assert pred_skeletons.shape == gt_skeletons.shape, \
             'The predicate and ground truth skeleton arrays must have the same shape.'
         pred_colors = self.__init_colors(pred_skeletons.shape[0], pred_colors)
@@ -353,10 +377,27 @@ class SkeletonVisualizer:
         skeletons: np.ndarray = np.concatenate((pred_skeletons, gt_skeletons), axis=0)
         colors: List[Color] = pred_colors + gt_colors
         is_gt_list: List[bool] = [False] * len(pred_skeletons) + [True] * len(gt_skeletons)
-        loss_container: LossContainer = LossContainer(pred_skeletons, gt_skeletons, self.joint_set, loss)
+        if include_losses:
+            loss_container: LossContainer = LossContainer(pred_skeletons, gt_skeletons, self.joint_set, loss)
         self.visualize(
             skeletons, colors, include_names, include_coordinates, automatic_camera_orientation,
-            is_gt_list, additional_tabs=[('Losses', loss_container.get_loss_tab())])
+            is_gt_list, additional_tabs=[('Losses', loss_container.get_loss_tab())] if include_losses else None)
+
+    def visualize_from_file_with_ground_truths(
+            self, pred_file_name: str, gt_file_name: str,
+            pred_colors: List[Color] = None, gt_colors: List[Color] = None,
+            include_names: bool = False, include_coordinates: bool = False,
+            automatic_camera_orientation: bool = False, include_losses: bool = True,
+            loss: Callable[[np.ndarray, np.ndarray], np.ndarray] = L2) -> None:
+        file: IO = open(pred_file_name, 'rb')
+        pred_skeletons = pickle.load(file)
+        file.close()
+        file = open(gt_file_name, 'rb')
+        gt_skeletons = pickle.load(file)
+        file.close()
+        self.visualize_with_ground_truths(
+            pred_skeletons, gt_skeletons, pred_colors, gt_colors, include_names,
+            include_coordinates, automatic_camera_orientation, include_losses, loss)
 
     def visualize_video(
             self, frames: np.ndarray, colors: List[Color] = None, fps: int = 15,
@@ -375,9 +416,9 @@ class SkeletonVisualizer:
             skeleton_converter = Skeleton.to_drawable_skeleton_for_video_with_coordinates
         else:
             skeleton_converter = Skeleton.to_drawable_skeleton_for_video
-        self.__create_skeleton_plot(skeletons=first_frame, skeleton_converter=skeleton_converter, colors=colors,
-                                    positions=skeleton_timestamps,
-                                    automatic_camera_orientation=automatic_camera_orientation, is_gt_list=is_gt_list)
+        self.__create_skeleton_plot(
+            skeletons=first_frame, skeleton_converter=skeleton_converter, colors=colors, positions=skeleton_timestamps,
+            automatic_camera_orientation=automatic_camera_orientation, is_gt_list=is_gt_list)
         self.__link_text_widgets(include_names, include_coordinates)
         self.plot.display()
         visibility_widget: HBox = HBox([self.joint_names_visible, self.joint_coordinates_visible])
@@ -406,7 +447,7 @@ class SkeletonVisualizer:
             self, pred_frames: np.ndarray, gt_frames: np.ndarray,
             pred_colors: List[Color] = None, gt_colors: List[Color] = None,
             fps: int = 15, include_names: bool = False, include_coordinates: bool = False,
-            automatic_camera_orientation: bool = False,
+            automatic_camera_orientation: bool = False, include_losses: bool = True,
             loss: Callable[[np.ndarray, np.ndarray], np.ndarray] = L2) -> None:
         pred_colors = self.__init_colors(pred_frames.shape[1], pred_colors)
         gt_colors = self.__init_colors(gt_frames.shape[1], gt_colors)
@@ -414,16 +455,17 @@ class SkeletonVisualizer:
         colors: List[Color] = pred_colors + gt_colors
         is_gt_list: List[bool] = [False] * len(pred_colors) + [True] * len(gt_colors)
         player: Play = create_video_player(fps, frames.shape[0] - 1)
-        loss_container: LossContainer = LossContainer(pred_frames, gt_frames, self.joint_set, loss, player)
+        if include_losses:
+            loss_container: LossContainer = LossContainer(pred_frames, gt_frames, self.joint_set, loss, player)
         self.visualize_video(
             frames, colors, fps, include_names, include_coordinates, automatic_camera_orientation,
-            is_gt_list, player, [('Losses', loss_container.get_loss_tab())])
+            is_gt_list, player, additional_tabs=[('Losses', loss_container.get_loss_tab())] if include_losses else None)
 
     def visualize_video_from_file_with_ground_truths(
             self, pred_file_name: str, gt_file_name: str,
             pred_colors: List[Color] = None, gt_colors: List[Color] = None,
             fps: int = 15, include_names: bool = False, include_coordinates: bool = False,
-            automatic_camera_orientation: bool = False,
+            automatic_camera_orientation: bool = False, include_losses: bool = True,
             loss: Callable[[np.ndarray, np.ndarray], np.ndarray] = L2) -> None:
         file: IO = open(pred_file_name, 'rb')
         pred_frames = pickle.load(file)
@@ -433,7 +475,7 @@ class SkeletonVisualizer:
         file.close()
         self.visualize_video_with_ground_truths(
             pred_frames, gt_frames, pred_colors, gt_colors, fps,
-            include_names, include_coordinates, automatic_camera_orientation, loss)
+            include_names, include_coordinates, automatic_camera_orientation, include_losses, loss)
 
     @staticmethod
     def __init_colors(number_of_skeletons: int, colors: List[Color]) -> List[Color]:
