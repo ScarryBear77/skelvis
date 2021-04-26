@@ -1,5 +1,5 @@
 import pickle
-from typing import Optional, List, Dict, Callable, IO, Tuple
+from typing import Optional, List, Dict, Callable, IO, Tuple, Final
 
 import ipywidgets as widgets
 import k3d
@@ -188,8 +188,9 @@ class ColorChanger:
 
 
 class LossContainer:
-    def __init__(self, pred_skeletons: np.ndarray, gt_skeletons: np.ndarray, joint_set: JointSet,
-                 loss: Callable[[np.ndarray, np.ndarray], np.ndarray], video_player: Optional[Play] = None):
+    def __init__(self, pred_skeletons: np.ndarray, gt_skeletons: np.ndarray,
+                 joint_set: JointSet, loss: Callable[[np.ndarray, np.ndarray], np.ndarray],
+                 loss_precision: int = 3, video_player: Optional[Play] = None):
         if video_player is not None:
             self.is_video: bool = True
             self.pred_skeletons: np.ndarray = np.swapaxes(pred_skeletons, 0, 1)
@@ -202,6 +203,7 @@ class LossContainer:
             self.is_video: bool = False
             self.pred_skeletons: np.ndarray = np.swapaxes(pred_skeletons[np.newaxis], 0, 1)
             self.gt_skeletons: np.ndarray = np.swapaxes(gt_skeletons[np.newaxis], 0, 1)
+        self.loss_value_format: str = '{:.' + str(loss_precision) + 'f}'
         self.joint_set: JointSet = joint_set
         self.number_of_skeletons: int = self.pred_skeletons.shape[0]
         # Joint loss related fields
@@ -304,13 +306,13 @@ class LossContainer:
 
     def __set_loss_labels(self, index: int) -> None:
         for i in range(self.number_of_skeletons):
-            self.skeleton_loss_labels[i].value = '{:.3f}'.format(self.skeleton_losses[i][index])
+            self.skeleton_loss_labels[i].value = self.loss_value_format.format(self.skeleton_losses[i][index])
             for j in range(self.joint_set.number_of_joints):
-                self.joint_loss_labels[i][j].value = '{:.3f}'.format(self.joint_losses[i][index][j])
-            self.all_joint_loss_labels[i].value = '{:.3f}'.format(self.skeleton_losses[i][index])
+                self.joint_loss_labels[i][j].value = self.loss_value_format.format(self.joint_losses[i][index][j])
+            self.all_joint_loss_labels[i].value = self.loss_value_format.format(self.skeleton_losses[i][index])
             self.min_joint_loss_name_labels[i].value = self.joint_set.names[self.min_joint_loss_indices[i][index]]
             self.max_joint_loss_name_labels[i].value = self.joint_set.names[self.max_joint_loss_indices[i][index]]
-        self.all_loss_label.value = '{:.3f}'.format(self.all_losses[index])
+        self.all_loss_label.value = self.loss_value_format.format(self.all_losses[index])
         self.min_loss_index_label.value = str(self.min_skeleton_loss_indices[index])
         self.max_loss_index_label.value = str(self.max_skeleton_loss_indices[index])
 
@@ -358,9 +360,7 @@ class SkeletonVisualizer:
             self, file_name: str, colors: List[Color] = None, include_names: bool = False,
             include_coordinates: bool = False, automatic_camera_orientation: bool = False,
             is_gt_list: List[bool] = None, additional_tabs: List[Tuple[str, Widget]] = None) -> None:
-        file: IO = open(file_name, 'rb')
-        skeletons = pickle.load(file)
-        file.close()
+        skeletons = self.__load_from_file(file_name)
         self.visualize(skeletons, colors, include_names, include_coordinates,
                        automatic_camera_orientation, is_gt_list,  additional_tabs)
 
@@ -369,7 +369,7 @@ class SkeletonVisualizer:
             pred_colors: List[Color] = None, gt_colors: List[Color] = None,
             include_names: bool = False, include_coordinates: bool = False,
             automatic_camera_orientation: bool = False, include_losses: bool = True,
-            loss: Callable[[np.ndarray, np.ndarray], np.ndarray] = L2) -> None:
+            loss: Callable[[np.ndarray, np.ndarray], np.ndarray] = L2, loss_precision: int = 3) -> None:
         assert pred_skeletons.shape == gt_skeletons.shape, \
             'The predicate and ground truth skeleton arrays must have the same shape.'
         pred_colors = self.__init_colors(pred_skeletons.shape[0], pred_colors)
@@ -378,26 +378,24 @@ class SkeletonVisualizer:
         colors: List[Color] = pred_colors + gt_colors
         is_gt_list: List[bool] = [False] * len(pred_skeletons) + [True] * len(gt_skeletons)
         if include_losses:
-            loss_container: LossContainer = LossContainer(pred_skeletons, gt_skeletons, self.joint_set, loss)
+            loss_container: LossContainer = LossContainer(pred_skeletons, gt_skeletons,
+                                                          self.joint_set, loss, loss_precision)
         self.visualize(
-            skeletons, colors, include_names, include_coordinates, automatic_camera_orientation,
-            is_gt_list, additional_tabs=[('Losses', loss_container.get_loss_tab())] if include_losses else None)
+            skeletons, colors, include_names, include_coordinates,
+            automatic_camera_orientation, is_gt_list,
+            additional_tabs=[('Losses', loss_container.get_loss_tab())] if include_losses else None)
 
     def visualize_from_file_with_ground_truths(
             self, pred_file_name: str, gt_file_name: str,
             pred_colors: List[Color] = None, gt_colors: List[Color] = None,
             include_names: bool = False, include_coordinates: bool = False,
             automatic_camera_orientation: bool = False, include_losses: bool = True,
-            loss: Callable[[np.ndarray, np.ndarray], np.ndarray] = L2) -> None:
-        file: IO = open(pred_file_name, 'rb')
-        pred_skeletons = pickle.load(file)
-        file.close()
-        file = open(gt_file_name, 'rb')
-        gt_skeletons = pickle.load(file)
-        file.close()
+            loss: Callable[[np.ndarray, np.ndarray], np.ndarray] = L2, loss_precision: int = 3) -> None:
+        pred_skeletons = self.__load_from_file(pred_file_name)
+        gt_skeletons = self.__load_from_file(gt_file_name)
         self.visualize_with_ground_truths(
-            pred_skeletons, gt_skeletons, pred_colors, gt_colors, include_names,
-            include_coordinates, automatic_camera_orientation, include_losses, loss)
+            pred_skeletons, gt_skeletons, pred_colors, gt_colors, include_names, include_coordinates,
+            automatic_camera_orientation, include_losses, loss, loss_precision)
 
     def visualize_video(
             self, frames: np.ndarray, colors: List[Color] = None, fps: int = 15,
@@ -436,9 +434,7 @@ class SkeletonVisualizer:
             include_names: bool = False, include_coordinates: bool = False,
             automatic_camera_orientation: bool = False, is_gt_list: List[bool] = None,
             player: Optional[Play] = None, additional_tabs: List[Tuple[str, Widget]] = None) -> None:
-        file: IO = open(file_name, 'rb')
-        frames = pickle.load(file)
-        file.close()
+        frames = self.__load_from_file(file_name)
         self.visualize_video(
             frames, colors, fps, include_names, include_coordinates,
             automatic_camera_orientation, is_gt_list, player, additional_tabs)
@@ -448,7 +444,7 @@ class SkeletonVisualizer:
             pred_colors: List[Color] = None, gt_colors: List[Color] = None,
             fps: int = 15, include_names: bool = False, include_coordinates: bool = False,
             automatic_camera_orientation: bool = False, include_losses: bool = True,
-            loss: Callable[[np.ndarray, np.ndarray], np.ndarray] = L2) -> None:
+            loss: Callable[[np.ndarray, np.ndarray], np.ndarray] = L2, loss_precision: int = 3) -> None:
         pred_colors = self.__init_colors(pred_frames.shape[1], pred_colors)
         gt_colors = self.__init_colors(gt_frames.shape[1], gt_colors)
         frames: np.ndarray = np.concatenate((pred_frames, gt_frames), axis=1)
@@ -456,26 +452,31 @@ class SkeletonVisualizer:
         is_gt_list: List[bool] = [False] * len(pred_colors) + [True] * len(gt_colors)
         player: Play = create_video_player(fps, frames.shape[0] - 1)
         if include_losses:
-            loss_container: LossContainer = LossContainer(pred_frames, gt_frames, self.joint_set, loss, player)
+            loss_container: LossContainer = LossContainer(pred_frames, gt_frames, self.joint_set,
+                                                          loss, loss_precision, player)
         self.visualize_video(
-            frames, colors, fps, include_names, include_coordinates, automatic_camera_orientation,
-            is_gt_list, player, additional_tabs=[('Losses', loss_container.get_loss_tab())] if include_losses else None)
+            frames, colors, fps, include_names, include_coordinates,
+            automatic_camera_orientation, is_gt_list, player,
+            additional_tabs=[('Losses', loss_container.get_loss_tab())] if include_losses else None)
 
     def visualize_video_from_file_with_ground_truths(
             self, pred_file_name: str, gt_file_name: str,
             pred_colors: List[Color] = None, gt_colors: List[Color] = None,
             fps: int = 15, include_names: bool = False, include_coordinates: bool = False,
             automatic_camera_orientation: bool = False, include_losses: bool = True,
-            loss: Callable[[np.ndarray, np.ndarray], np.ndarray] = L2) -> None:
-        file: IO = open(pred_file_name, 'rb')
-        pred_frames = pickle.load(file)
-        file.close()
-        file = open(gt_file_name, 'rb')
-        gt_frames = pickle.load(file)
-        file.close()
+            loss: Callable[[np.ndarray, np.ndarray], np.ndarray] = L2, loss_precision: int = 3) -> None:
+        pred_frames = self.__load_from_file(pred_file_name)
+        gt_frames = self.__load_from_file(gt_file_name)
         self.visualize_video_with_ground_truths(
-            pred_frames, gt_frames, pred_colors, gt_colors, fps,
-            include_names, include_coordinates, automatic_camera_orientation, include_losses, loss)
+            pred_frames, gt_frames, pred_colors, gt_colors, fps, include_names, include_coordinates,
+            automatic_camera_orientation, include_losses, loss, loss_precision)
+
+    @staticmethod
+    def __load_from_file(file_name: str) -> np.ndarray:
+        file: IO = open(file_name, 'rb')
+        skeletons = pickle.load(file)
+        file.close()
+        return skeletons
 
     @staticmethod
     def __init_colors(number_of_skeletons: int, colors: List[Color]) -> List[Color]:
