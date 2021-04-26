@@ -1,5 +1,5 @@
 import pickle
-from typing import Optional, List, Dict, Callable, IO, Tuple, Final
+from typing import Optional, List, Dict, Callable, IO, Tuple
 
 import ipywidgets as widgets
 import k3d
@@ -226,12 +226,15 @@ class LossContainer:
         self.min_loss_index_label: Label = Label(value='test')
         self.max_loss_index_label: Label = Label(value='test')
 
-    def get_loss_tab(self) -> Tab:
+    def get_loss_tab(self) -> VBox:
         loss_tab: Tab = self.__create_empty_loss_tabs()
         self.__set_loss_labels(0)
         if self.is_video:
             self.video_player.observe(self.__update_losses, names='value')
-        return loss_tab
+        precision_adjuster: IntSlider = IntSlider(value=self.loss_precision, min=1, max=8,
+                                                  step=1, description='Loss precision')
+        precision_adjuster.observe(self.__update_loss_precision, names='value')
+        return VBox(children=[precision_adjuster, loss_tab])
 
     def __create_empty_loss_tabs(self) -> Tab:
         skeleton_loss_tabs: List[HBox] = [self.__create_loss_tab_for_skeleton(i)
@@ -318,6 +321,10 @@ class LossContainer:
 
     def __update_losses(self, current_frame):
         self.__set_loss_labels(current_frame.new)
+
+    def __update_loss_precision(self, precision):
+        self.loss_value_format = '{:.' + str(precision.new) + 'f}'
+        self.__set_loss_labels(int(self.video_player.value))
 
 
 class SkeletonVisualizer:
