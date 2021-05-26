@@ -203,7 +203,8 @@ class LossContainer:
             self.is_video: bool = False
             self.pred_skeletons: np.ndarray = np.swapaxes(pred_skeletons[np.newaxis], 0, 1)
             self.gt_skeletons: np.ndarray = np.swapaxes(gt_skeletons[np.newaxis], 0, 1)
-        self.loss_value_format: str = '{:.' + str(loss_precision) + 'f}'
+        self.loss_precision: int = loss_precision
+        self.loss_value_format: str = '{:.' + str(self.loss_precision) + 'f}'
         self.joint_set: JointSet = joint_set
         self.number_of_skeletons: int = self.pred_skeletons.shape[0]
         # Joint loss related fields
@@ -232,7 +233,7 @@ class LossContainer:
         if self.is_video:
             self.video_player.observe(self.__update_losses, names='value')
         precision_adjuster: IntSlider = IntSlider(value=self.loss_precision, min=1, max=8,
-                                                  step=1, description='Loss precision')
+                                                  step=1, description='Precision')
         precision_adjuster.observe(self.__update_loss_precision, names='value')
         return VBox(children=[precision_adjuster, loss_tab])
 
@@ -323,8 +324,12 @@ class LossContainer:
         self.__set_loss_labels(current_frame.new)
 
     def __update_loss_precision(self, precision):
-        self.loss_value_format = '{:.' + str(precision.new) + 'f}'
-        self.__set_loss_labels(int(self.video_player.value))
+        self.loss_precision = precision.new
+        self.loss_value_format = '{:.' + str(self.loss_precision) + 'f}'
+        if self.is_video:
+            self.__set_loss_labels(int(self.video_player.value))
+        else:
+            self.__set_loss_labels(0)
 
 
 class SkeletonVisualizer:
