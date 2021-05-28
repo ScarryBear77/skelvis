@@ -562,6 +562,7 @@ class SkeletonVisualizer:
         ), zip(positions, colors, is_gt_list)))
 
     def __add_skeletons_to_plot(self, skeletons: List[DrawableSkeleton]) -> None:
+        self.skeletons = []
         for drawable_skeleton in skeletons:
             self.plot += drawable_skeleton
             self.skeletons.append(drawable_skeleton)
